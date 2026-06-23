@@ -1,0 +1,13 @@
+{
+  "createdAt": "2026-06-15T16:29:39.967Z",
+  "name": "scifi-yujie-robot",
+  "description": "科幻色彩的成熟女性机器人音色，低中音，冷静克制，轻微电子合成质感。",
+  "designProvider": "existing-preview-audio",
+  "ttsDesignModel": "qwen3-tts-vd-2026-01-26",
+  "ttsDesignVoice": "existing-preview-audio",
+  "realtimeTargetModel": "qwen3.5-omni-plus-realtime",
+  "omniRealtimeVoice": "qwen-omni-vc-scifirobot-voice-20260616002940015-53ac",
+  "previewAudioPath": "scifi-yujie-robot-preview.wav",
+  "voicePrompt": "成熟女性声音，30岁左右，低中音，冷静、克制、有磁性。带轻微科幻女机器人质感，声音干净透明，边缘有细腻电子合成感，但不要机械噪声、不要背景音乐、不要环境声、不要音效。语速中等偏慢，吐字清晰，情绪稳定，有高级感和距离感，适合作为未来主义语音助手。",
+  "previewText": "你好，我是你的实时语音助手。我会用简洁、冷静、清晰的方式回应你。当前系统已经进入待命状态，你可以直接说出你的问题。"
+}

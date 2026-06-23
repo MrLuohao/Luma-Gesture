@@ -1,0 +1,3628 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gesture Field · 3D 粒子手势原型</title>
+  <script>
+    if (new URLSearchParams(window.location.search).has('desktop')) {
+      document.documentElement.classList.add('is-desktop-shell');
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050506;
+      --glass: rgb(245 245 247 / 0.072);
+      --glass-strong: rgb(245 245 247 / 0.105);
+      --glass-soft: rgb(245 245 247 / 0.048);
+      --line: rgb(245 245 247 / 0.15);
+      --line-strong: rgb(245 245 247 / 0.24);
+      --text: #f5f5f7;
+      --muted: rgb(235 235 245 / 0.58);
+      --dim: rgb(235 235 245 / 0.34);
+      --cyan: #64f3df;
+      --violet: #b8a4ff;
+      --gold: #ffd184;
+      --coral: #ff8a7a;
+      --shadow: rgb(0 0 0 / 0.36);
+      --radius: 8px;
+      --gutter: clamp(16px, 3vw, 30px);
+      --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      line-height: 1.5;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    p { margin: 0; }
+    video, canvas, svg { display: block; }
+
+    .experience {
+      position: relative;
+      min-height: 100svh;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 23%),
+        linear-gradient(90deg, #050506 0%, #090a0a 46%, #050707 100%);
+    }
+
+    .experience::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent, rgb(100 243 223 / 0.08), transparent),
+        linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 30%, rgb(0 0 0 / 0.18));
+      mask-image: linear-gradient(180deg, black 0%, black 80%, transparent 100%);
+      opacity: 0.62;
+    }
+
+	    .experience::after {
+	      content: "";
+	      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgb(0 0 0 / 0.04), transparent 24%, transparent 72%, rgb(0 0 0 / 0.52));
+	      opacity: 1;
+	    }
+
+    html.is-desktop-shell,
+    html.is-desktop-shell body {
+      background: transparent !important;
+    }
+
+    html.is-desktop-shell .experience {
+      background: transparent !important;
+    }
+
+    html.is-desktop-shell .experience::before,
+    html.is-desktop-shell .experience::after {
+      opacity: 0;
+    }
+
+    html.is-desktop-shell body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 18px;
+      z-index: 20;
+      background: transparent;
+      -webkit-app-region: drag;
+    }
+
+    html.is-desktop-shell button,
+    html.is-desktop-shell .desktop-shell-controls,
+    html.is-desktop-shell .topbar,
+    html.is-desktop-shell .command-deck,
+    html.is-desktop-shell .micro-panel,
+    html.is-desktop-shell .voice-orchestrator {
+      -webkit-app-region: no-drag;
+    }
+
+    .desktop-shell-controls {
+      display: none;
+    }
+
+    html.is-desktop-shell .desktop-shell-controls {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 30;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: auto;
+      opacity: 0.32;
+      transition: opacity 160ms ease;
+    }
+
+    html.is-desktop-shell[data-interaction-mode="true"] .desktop-shell-controls {
+      opacity: 1;
+    }
+
+    .desktop-shell-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid rgb(245 245 247 / 0.12);
+      border-radius: 999px;
+      color: rgb(245 245 247 / 0.74);
+      background: rgb(12 13 14 / 0.34);
+      backdrop-filter: blur(18px) saturate(1.35);
+      box-shadow: 0 10px 24px rgb(0 0 0 / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.08);
+      line-height: 1;
+      display: inline-grid;
+      place-items: center;
+      transition: background 160ms ease, color 160ms ease, transform 120ms ease;
+    }
+
+    .desktop-shell-btn:hover {
+      color: #fff;
+      background: rgb(245 245 247 / 0.12);
+      transform: translateY(-1px);
+    }
+
+	    #stage3d {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      touch-action: none;
+    }
+
+    #stage3d canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .hud {
+      position: relative;
+      z-index: 3;
+      height: 100svh;
+      min-height: 100svh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 16px;
+      padding: 18px var(--gutter) 20px;
+      pointer-events: none;
+    }
+
+    .topbar,
+    .readout,
+    .command-deck,
+    .camera-chip {
+      pointer-events: auto;
+    }
+
+    .topbar {
+      width: min(100%, 1180px);
+      margin-inline: auto;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+      align-items: center;
+      gap: 12px;
+      min-height: 44px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      backdrop-filter: none;
+      box-shadow: none;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      gap: 10px;
+      width: max-content;
+      min-height: 42px;
+      padding: 6px 12px 6px 7px;
+      border: 1px solid rgb(245 245 247 / 0.11);
+      border-radius: var(--radius);
+      background: rgb(16 16 18 / 0.46);
+      backdrop-filter: blur(28px) saturate(1.55);
+      box-shadow: 0 16px 42px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.08);
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgb(245 245 247 / 0.18);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgb(245 245 247 / 0.16), rgb(245 245 247 / 0.04));
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      border: 1px solid rgb(100 243 223 / 0.74);
+      transform: none;
+    }
+
+    .brand-mark::after {
+      inset: 11px;
+      border-color: transparent;
+      background: var(--cyan);
+      box-shadow: 0 0 14px rgb(100 243 223 / 0.45);
+    }
+
+    .brand-copy {
+      min-width: 0;
+      display: grid;
+      gap: 1px;
+    }
+
+    .brand strong {
+      overflow: hidden;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .brand span,
+    .system-chip,
+    .status-label,
+    .micro-label,
+    .camera-chip span {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .system-chip {
+      justify-self: center;
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 13px;
+      border: 1px solid rgb(245 245 247 / 0.1);
+      border-radius: 999px;
+      background: rgb(245 245 247 / 0.06);
+      color: rgb(245 245 247 / 0.68);
+      backdrop-filter: blur(24px) saturate(1.45);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgb(245 245 247 / 0.26);
+      transition: background 160ms ease, box-shadow 160ms ease;
+    }
+
+    .live-dot.is-active {
+      background: var(--cyan);
+      box-shadow: 0 0 0 5px rgb(100 243 223 / 0.1), 0 0 18px rgb(100 243 223 / 0.38);
+    }
+
+    .actions {
+      justify-self: end;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      min-height: 42px;
+      padding: 3px;
+      border: 1px solid rgb(245 245 247 / 0.11);
+      border-radius: var(--radius);
+      background: rgb(16 16 18 / 0.46);
+      backdrop-filter: blur(28px) saturate(1.55);
+      box-shadow: 0 16px 42px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.08);
+    }
+
+    .btn,
+    .icon-btn,
+    .mode-btn {
+      border: 1px solid rgb(245 245 247 / 0.12);
+      border-radius: var(--radius);
+      color: var(--text);
+      background: rgb(245 245 247 / 0.055);
+      backdrop-filter: blur(24px) saturate(1.45);
+      transition: transform 90ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .btn {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 13px;
+      font-size: 13px;
+      font-weight: 560;
+      white-space: nowrap;
+    }
+
+    .btn svg,
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+    }
+
+    .btn-primary {
+      border-color: rgb(245 245 247 / 0.18);
+      background: rgb(245 245 247 / 0.14);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+    }
+
+    .btn:hover,
+    .icon-btn:hover,
+    .mode-btn:hover {
+      border-color: rgb(245 245 247 / 0.28);
+      background: rgb(245 245 247 / 0.12);
+    }
+
+    .btn-primary:hover,
+    .btn[aria-pressed="true"] {
+      border-color: rgb(245 245 247 / 0.28);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
+    }
+
+    .btn:active,
+    .icon-btn:active,
+    .mode-btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      cursor: wait;
+      color: var(--muted);
+      border-color: var(--line);
+      box-shadow: none;
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      color: rgb(245 245 247 / 0.78);
+    }
+
+    .middle-zone {
+      position: absolute;
+      left: var(--gutter);
+      bottom: 20px;
+      width: min(292px, calc(100% - var(--gutter) * 2));
+      margin: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      align-items: center;
+      align-self: end;
+      gap: 18px;
+    }
+
+    .middle-zone > [aria-hidden="true"],
+    .micro-panel {
+      display: none;
+    }
+
+    .readout {
+      align-self: end;
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px 16px;
+      border: 1px solid rgb(245 245 247 / 0.12);
+      border-radius: var(--radius);
+      background: rgb(20 20 22 / 0.54);
+      backdrop-filter: blur(32px) saturate(1.55);
+      box-shadow: 0 18px 54px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.08);
+    }
+
+    .status-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 18px;
+    }
+
+    .status-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: rgb(245 245 247 / 0.72);
+    }
+
+    .mode-readout {
+      padding: 2px 0 8px;
+      border-bottom: 1px solid rgb(245 245 247 / 0.1);
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .mode-readout strong {
+      display: block;
+      overflow: hidden;
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 650;
+      line-height: 1.05;
+      letter-spacing: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mode-readout span {
+      display: block;
+      margin-top: 5px;
+      overflow: hidden;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 18px;
+      row-gap: 12px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .metric strong {
+      display: block;
+      overflow: hidden;
+      color: var(--text);
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 640;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 5px;
+      overflow: hidden;
+      color: var(--dim);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .micro-panel {
+      align-self: start;
+      justify-self: end;
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      max-width: 190px;
+      opacity: 0.94;
+    }
+
+    .micro-panel .micro-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgb(9 11 11 / 0.56);
+      backdrop-filter: blur(18px);
+    }
+
+    .micro-row strong {
+      color: #efe9de;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .middle-zone > [aria-hidden="true"],
+    .middle-zone .micro-panel {
+      display: none;
+    }
+
+    .command-deck {
+      grid-row: 3;
+      align-self: end;
+      width: min(calc(100% - 356px), 960px);
+      justify-self: end;
+      display: grid;
+      gap: 0;
+      padding: 6px;
+      border: 1px solid rgb(245 245 247 / 0.12);
+      border-radius: var(--radius);
+      background: rgb(20 20 22 / 0.54);
+      backdrop-filter: blur(32px) saturate(1.55);
+      box-shadow: 0 18px 54px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.08);
+    }
+
+    .deck-head {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding-inline: 2px;
+    }
+
+    .deck-head .micro-label {
+      color: #cdd4cf;
+    }
+
+    .deck-head span:last-child {
+      color: var(--dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 4px;
+      padding: 2px;
+      border-radius: var(--radius);
+      background: rgb(245 245 247 / 0.045);
+    }
+
+    .mode-btn {
+      min-width: 0;
+      min-height: 40px;
+      padding: 0 10px;
+      font-size: 13px;
+      font-weight: 560;
+      border-color: transparent;
+      background: transparent;
+      white-space: nowrap;
+    }
+
+    .mode-btn[aria-pressed="true"] {
+      color: var(--text);
+      border-color: rgb(245 245 247 / 0.14);
+      background: rgb(245 245 247 / 0.17);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 8px 24px rgb(0 0 0 / 0.16);
+    }
+
+    .camera-chip {
+      position: absolute;
+      right: var(--gutter);
+      bottom: 126px;
+      justify-self: end;
+      width: 150px;
+      overflow: hidden;
+      border: 1px solid rgb(245 245 247 / 0.12);
+      border-radius: var(--radius);
+      background: rgb(20 20 22 / 0.62);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 180ms ease, transform 180ms ease;
+      box-shadow: 0 16px 42px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.08);
+      pointer-events: none;
+      backdrop-filter: blur(28px) saturate(1.45);
+    }
+
+    .camera-chip.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .camera-chip video,
+    .camera-chip canvas {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+    }
+
+    .camera-chip video {
+      object-fit: cover;
+      transform: scaleX(-1);
+      filter: saturate(0.42) contrast(1.08) brightness(0.9);
+    }
+
+    .camera-chip canvas {
+      position: absolute;
+      inset: 0;
+      height: auto;
+    }
+
+    .camera-chip span {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 9px;
+      border-top: 1px solid rgb(245 245 247 / 0.1);
+    }
+
+    .camera-chip span::after {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: 0 0 14px rgb(255 138 122 / 0.42);
+    }
+
+    .fallback {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1080px) {
+      body { overflow: auto; }
+
+      .hud {
+        min-height: 100svh;
+        padding-bottom: 16px;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr auto;
+      }
+
+      .system-chip {
+        display: none;
+      }
+
+      .middle-zone {
+        position: relative;
+        left: auto;
+        bottom: auto;
+        width: min(100%, 1380px);
+        margin-inline: auto;
+        grid-template-columns: minmax(240px, 320px) 1fr;
+        align-self: end;
+      }
+
+      .micro-panel {
+        display: none;
+      }
+
+      .camera-chip {
+        position: absolute;
+        right: var(--gutter);
+        top: 76px;
+        bottom: auto;
+        width: 128px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      :root { --gutter: 14px; }
+
+      .hud {
+        grid-template-rows: auto 1fr auto;
+        gap: 12px;
+        padding-top: 12px;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .actions {
+        justify-self: stretch;
+        width: 100%;
+      }
+
+      .brand {
+        width: 100%;
+      }
+
+      .actions .btn {
+        flex: 1 1 auto;
+      }
+
+      .middle-zone {
+        grid-template-columns: 1fr;
+        align-items: end;
+      }
+
+      .readout {
+        align-self: end;
+      }
+
+      .mode-readout strong {
+        font-size: 25px;
+      }
+
+      .command-deck {
+        width: 100%;
+        justify-self: center;
+      }
+
+      .mode-switch {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .mode-btn:first-child {
+        grid-column: span 3;
+      }
+
+      .deck-head span:last-child {
+        display: none;
+      }
+
+      .camera-chip {
+        top: 114px;
+        bottom: auto;
+        width: 104px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .brand-copy > span {
+        display: none;
+      }
+
+      .status-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .btn {
+        padding-inline: 10px;
+      }
+
+      .mode-btn {
+        font-size: 12px;
+      }
+    }
+
+    .topbar,
+    .middle-zone {
+      display: none !important;
+    }
+
+    .hud {
+      display: block;
+      padding: 0;
+    }
+
+    .command-deck {
+      position: absolute;
+      right: var(--gutter);
+      bottom: 20px;
+      width: min(760px, calc(100% - var(--gutter) * 2));
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 7px;
+      border: 1px solid rgb(245 245 247 / 0.13);
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgb(245 245 247 / 0.13), rgb(245 245 247 / 0.065));
+      backdrop-filter: blur(34px) saturate(1.65);
+      box-shadow:
+        0 18px 54px rgb(0 0 0 / 0.3),
+        inset 0 1px 0 rgb(255 255 255 / 0.16),
+        inset 0 -1px 0 rgb(0 0 0 / 0.18);
+      pointer-events: auto;
+    }
+
+    .deck-head {
+      display: none !important;
+    }
+
+    .mode-switch {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+      padding: 0;
+      border-radius: 999px;
+      background: transparent;
+    }
+
+    .mode-btn {
+      min-width: 54px;
+      min-height: 36px;
+      padding: 0 13px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: rgb(245 245 247 / 0.62);
+      font-size: 13px;
+      font-weight: 520;
+      box-shadow: none;
+    }
+
+    .mode-btn:hover {
+      background: rgb(245 245 247 / 0.09);
+      color: rgb(245 245 247 / 0.86);
+    }
+
+    .mode-btn[aria-pressed="true"] {
+      color: #111214;
+      border: 0;
+      background: rgb(245 245 247 / 0.88);
+      box-shadow:
+        0 8px 22px rgb(0 0 0 / 0.22),
+        inset 0 1px 0 rgb(255 255 255 / 0.45);
+    }
+
+    .command-deck .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      backdrop-filter: none;
+      box-shadow: none;
+    }
+
+    .command-deck .actions::before {
+      content: "";
+      width: 1px;
+      height: 24px;
+      margin-inline: 2px;
+      background: rgb(245 245 247 / 0.14);
+    }
+
+    .command-deck .btn,
+    .command-deck .icon-btn {
+      border: 0;
+      border-radius: 999px;
+      background: rgb(245 245 247 / 0.1);
+      color: rgb(245 245 247 / 0.86);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+    }
+
+    .command-deck .btn {
+      min-height: 36px;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 560;
+    }
+
+    .command-deck .icon-btn {
+      width: 36px;
+      height: 36px;
+    }
+
+    .command-deck .btn:hover,
+    .command-deck .icon-btn:hover {
+      background: rgb(245 245 247 / 0.16);
+      color: var(--text);
+    }
+
+    .camera-chip {
+      right: var(--gutter);
+      bottom: 82px;
+    }
+
+    @media (max-width: 720px) {
+      .command-deck {
+        left: var(--gutter);
+        right: var(--gutter);
+        bottom: 16px;
+        width: auto;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-end;
+        gap: 7px;
+        border-radius: 26px;
+        padding: 8px;
+      }
+
+      .mode-switch {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .command-deck .mode-btn,
+      .command-deck .mode-btn:first-child {
+        grid-column: auto;
+        min-width: 0;
+        min-height: 38px;
+        padding: 0 8px;
+      }
+
+      .command-deck .actions {
+        justify-content: stretch;
+      }
+
+      .command-deck .actions::before {
+        display: none;
+      }
+
+      .command-deck .btn {
+        flex: 1 1 auto;
+      }
+
+      .camera-chip {
+        top: auto;
+        bottom: 160px;
+      }
+    }
+
+    /* Final chrome: one compact material dock with an equal-width segmented track. */
+    .command-deck {
+      width: auto;
+      min-height: 54px;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 28px;
+      border-color: rgb(255 255 255 / 0.13);
+      background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.145), rgb(255 255 255 / 0.055)),
+        rgb(13 14 15 / 0.72);
+      backdrop-filter: blur(38px) saturate(1.65);
+      box-shadow:
+        0 24px 70px rgb(0 0 0 / 0.36),
+        inset 0 1px 0 rgb(255 255 255 / 0.18),
+        inset 0 -1px 0 rgb(0 0 0 / 0.28);
+    }
+
+    .command-deck::before {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgb(255 255 255 / 0.09), transparent 28%, transparent 70%, rgb(255 255 255 / 0.06));
+      opacity: 0.48;
+    }
+
+    .mode-switch,
+    .command-deck .actions {
+      position: relative;
+      z-index: 1;
+    }
+
+    .mode-switch {
+      --indicator-x: 3px;
+      --indicator-w: 52px;
+      width: 392px;
+      height: 42px;
+      flex: 0 0 392px;
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 2px;
+      padding: 3px;
+      overflow: hidden;
+      border: 1px solid rgb(255 255 255 / 0.075);
+      border-radius: 23px;
+      background:
+        linear-gradient(180deg, rgb(0 0 0 / 0.22), rgb(255 255 255 / 0.035)),
+        rgb(255 255 255 / 0.035);
+      box-shadow: inset 0 1px 5px rgb(0 0 0 / 0.26);
+    }
+
+    .mode-switch::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 0;
+      width: var(--indicator-w);
+      border-radius: 19px;
+      background: linear-gradient(180deg, rgb(255 255 255 / 0.96), rgb(220 223 228 / 0.9));
+      box-shadow:
+        0 9px 24px rgb(0 0 0 / 0.26),
+        inset 0 1px 0 rgb(255 255 255 / 0.58);
+      transform: translateX(var(--indicator-x));
+      transition: transform 220ms cubic-bezier(.2, .8, .2, 1), width 220ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .mode-btn {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-width: 0;
+      min-height: 34px;
+      height: 34px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 18px;
+      background: transparent;
+      color: rgb(245 245 247 / 0.56);
+      font-size: 12px;
+      font-weight: 560;
+      letter-spacing: 0;
+      box-shadow: none;
+    }
+
+    .mode-btn:hover {
+      background: rgb(255 255 255 / 0.055);
+      color: rgb(245 245 247 / 0.82);
+    }
+
+    .mode-btn[aria-pressed="true"] {
+      color: #101113;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .command-deck .actions {
+      flex: 0 0 auto;
+      gap: 5px;
+    }
+
+    .command-deck .actions::before {
+      height: 24px;
+      margin-inline: 0 3px;
+      background: rgb(255 255 255 / 0.13);
+    }
+
+    .command-deck .btn,
+    .command-deck .icon-btn {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      min-height: 38px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.055));
+      color: rgb(245 245 247 / 0.78);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
+    }
+
+    .command-deck .btn span {
+      display: none;
+    }
+
+    .command-deck .btn svg,
+    .command-deck .icon-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .command-deck .btn:hover,
+    .command-deck .icon-btn:hover {
+      background: linear-gradient(180deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.09));
+      color: var(--text);
+    }
+
+    @media (max-width: 720px) {
+      .command-deck {
+        left: 10px;
+        right: 10px;
+        bottom: 12px;
+        width: auto;
+        max-width: none;
+        min-height: 52px;
+        justify-self: stretch;
+        flex-direction: row;
+        align-items: center;
+        gap: 5px;
+        padding: 5px;
+        border-radius: 26px;
+      }
+
+      .mode-switch {
+        width: auto;
+        height: 40px;
+        flex: 1 1 auto;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 1px;
+        padding: 3px;
+      }
+
+      .command-deck .mode-btn,
+      .command-deck .mode-btn:first-child {
+        min-height: 32px;
+        height: 32px;
+        font-size: 10px;
+        padding: 0;
+      }
+
+      .command-deck .actions {
+        width: auto;
+        flex: 0 0 auto;
+        gap: 4px;
+      }
+
+      .command-deck .actions::before {
+        height: 22px;
+        margin-inline: 0 1px;
+      }
+
+      .command-deck .btn,
+      .command-deck .icon-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+      }
+
+      .camera-chip {
+        bottom: 76px;
+      }
+    }
+
+    .voice-visual {
+      position: absolute;
+      left: 50%;
+      bottom: clamp(86px, 12svh, 116px);
+      z-index: 3;
+      width: min(38vw, 560px);
+      min-width: 380px;
+      height: 112px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      mix-blend-mode: screen;
+      opacity: 1;
+      contain: layout paint size;
+    }
+
+    .voice-visual::before,
+    .voice-visual::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 86%;
+      height: 58%;
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .voice-visual::before {
+      display: none;
+    }
+
+    .voice-visual::after {
+      width: 66%;
+      height: 1.2px;
+      background: linear-gradient(90deg, transparent, rgb(245 245 247 / 0.44) 24%, rgb(245 245 247 / 0.82) 50%, rgb(245 245 247 / 0.44) 76%, transparent);
+      opacity: 0.34;
+    }
+
+    .voice-wave-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      filter:
+        drop-shadow(0 0 12px rgb(245 245 247 / 0.28))
+        drop-shadow(0 0 26px rgb(168 205 198 / 0.12));
+    }
+
+    .voice-orchestrator {
+      position: absolute;
+      left: 50%;
+      bottom: clamp(38px, 5svh, 52px);
+      z-index: 4;
+      width: 160px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+      min-height: 34px;
+      padding: 4px;
+      border: 1px solid rgb(245 245 247 / 0.1);
+      border-radius: 999px;
+      background: rgb(12 13 14 / 0.42);
+      backdrop-filter: blur(22px) saturate(1.4);
+      box-shadow:
+        0 14px 40px rgb(0 0 0 / 0.22),
+        inset 0 1px 0 rgb(255 255 255 / 0.08);
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    .voice-state-pill {
+      width: 58px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 0 10px;
+      border-radius: 999px;
+      color: rgb(245 245 247 / 0.72);
+      background: rgb(245 245 247 / 0.055);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .voice-state-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgb(245 245 247 / 0.34);
+      box-shadow: 0 0 0 0 transparent;
+      transition: background 180ms ease, box-shadow 180ms ease;
+    }
+
+    .voice-demo-btn {
+      width: 42px;
+      height: 26px;
+      min-width: 42px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      color: rgb(245 245 247 / 0.72);
+      background: transparent;
+      font-size: 11px;
+      font-weight: 560;
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+    }
+
+    .voice-demo-btn:hover {
+      color: var(--text);
+      background: rgb(245 245 247 / 0.09);
+    }
+
+    .voice-demo-btn:disabled {
+      cursor: default;
+      color: rgb(245 245 247 / 0.26);
+      background: transparent;
+    }
+
+    .voice-orchestrator[data-voice-state="connecting"] .voice-state-dot {
+      background: rgb(210 226 222 / 0.72);
+      box-shadow: 0 0 10px rgb(210 226 222 / 0.2);
+    }
+
+    .voice-orchestrator[data-voice-state="listening"] .voice-state-dot {
+      background: rgb(245 245 247 / 0.9);
+      box-shadow: 0 0 12px rgb(245 245 247 / 0.38);
+    }
+
+    .voice-orchestrator[data-voice-state="thinking"] .voice-state-dot {
+      background: rgb(190 215 210 / 0.78);
+      box-shadow: 0 0 10px rgb(190 215 210 / 0.24);
+    }
+
+    .voice-orchestrator[data-voice-state="speaking"] .voice-state-dot {
+      background: rgb(255 255 255 / 0.82);
+      box-shadow: 0 0 14px rgb(255 255 255 / 0.32);
+    }
+
+    .voice-orchestrator[data-voice-state="interrupt"] .voice-state-dot {
+      background: rgb(255 218 190 / 0.86);
+      box-shadow: 0 0 14px rgb(255 218 190 / 0.3);
+    }
+
+    .voice-orchestrator[data-voice-state="error"] .voice-state-dot {
+      background: rgb(255 116 116 / 0.86);
+      box-shadow: 0 0 14px rgb(255 116 116 / 0.32);
+    }
+
+    @media (max-width: 1080px) {
+      .voice-visual {
+        width: min(52vw, 480px);
+        min-width: 320px;
+        bottom: clamp(92px, 13svh, 132px);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .voice-visual {
+        bottom: 82px;
+        width: min(72vw, 330px);
+        min-width: 0;
+        height: 86px;
+        opacity: 0.94;
+      }
+
+      .voice-orchestrator {
+        bottom: 154px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="experience" data-od-id="gesture-particle-experience" aria-label="3D 粒子手势交互原型">
+    <div id="stage3d" aria-label="3D 粒子舞台"></div>
+    <div class="voice-visual" aria-hidden="true">
+      <canvas class="voice-wave-canvas" id="voiceWaveCanvas"></canvas>
+    </div>
+	    <div class="voice-orchestrator" id="voiceOrchestrator" data-voice-state="idle" aria-label="实时语音对话">
+      <span class="voice-state-pill">
+        <span class="voice-state-dot" aria-hidden="true"></span>
+        <span id="voiceModeLabel">待机</span>
+      </span>
+      <button class="voice-demo-btn" id="voiceDemoToggle" type="button" aria-pressed="false">开始</button>
+	      <button class="voice-demo-btn" id="voiceInterrupt" type="button" disabled>打断</button>
+	    </div>
+    <div class="desktop-shell-controls" aria-label="桌面窗口控制">
+      <button class="desktop-shell-btn" id="desktopClickThroughToggle" type="button" title="切换鼠标穿透">◎</button>
+      <button class="desktop-shell-btn" id="desktopCloseButton" type="button" title="关闭桌面模式">×</button>
+    </div>
+
+	    <div class="hud">
+      <header class="topbar">
+        <div class="brand" aria-label="Gesture Field">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-copy">
+            <strong>Gesture Field</strong>
+            <span>Particle instrument</span>
+          </span>
+        </div>
+
+        <div class="system-chip" aria-live="polite">
+          <span class="live-dot" id="liveDot" aria-hidden="true"></span>
+          <span id="systemState">Pointer standby</span>
+        </div>
+      </header>
+
+      <div class="middle-zone">
+        <aside class="readout" aria-live="polite">
+          <div class="status-head">
+            <span class="status-label">
+              <span class="live-dot" id="panelLiveDot" aria-hidden="true"></span>
+              <span>Live field</span>
+            </span>
+            <span class="micro-label" id="inputState">指针备用</span>
+          </div>
+
+          <div class="mode-readout">
+            <strong id="gestureState">待机</strong>
+            <span id="modeCaption">ORBIT / READY</span>
+          </div>
+
+          <div class="status-grid">
+            <div class="metric">
+              <strong id="pointsState">0</strong>
+              <span>关键点</span>
+            </div>
+            <div class="metric">
+              <strong id="fpsState">--</strong>
+              <span>FPS</span>
+            </div>
+            <div class="metric">
+              <strong id="modeState">自动</strong>
+              <span>模式</span>
+            </div>
+            <div class="metric">
+              <strong id="energyState">18%</strong>
+              <span>能量</span>
+            </div>
+          </div>
+        </aside>
+
+        <div aria-hidden="true"></div>
+
+        <aside class="micro-panel" aria-label="粒子参数">
+          <div class="micro-row">
+            <span class="micro-label">Particles</span>
+            <strong>4200</strong>
+          </div>
+          <div class="micro-row">
+            <span class="micro-label">Depth</span>
+            <strong id="depthState">3.0</strong>
+          </div>
+          <div class="micro-row">
+            <span class="micro-label">Signal</span>
+            <strong id="signalState">18%</strong>
+          </div>
+        </aside>
+      </div>
+
+      <div class="command-deck" aria-label="粒子效果切换">
+        <div class="deck-head">
+          <span class="micro-label">Particle modes</span>
+          <span>Auto maps hand shape to field behavior</span>
+        </div>
+        <div class="mode-switch" id="modeSwitch">
+          <button class="mode-btn" type="button" data-mode="auto" aria-pressed="true">自动</button>
+          <button class="mode-btn" type="button" data-mode="orbit" aria-pressed="false">轨道</button>
+          <button class="mode-btn" type="button" data-mode="nebula" aria-pressed="false">星云</button>
+          <button class="mode-btn" type="button" data-mode="gather" aria-pressed="false">聚合</button>
+	          <button class="mode-btn" type="button" data-mode="wave" aria-pressed="false">扩散</button>
+	          <button class="mode-btn" type="button" data-mode="vortex" aria-pressed="false">漩涡</button>
+          <button class="mode-btn" type="button" data-mode="heart" aria-pressed="false">爱心</button>
+	          <button class="mode-btn" type="button" data-mode="type" aria-pressed="false">成字</button>
+        </div>
+        <div class="actions control-actions" aria-label="核心控制">
+          <button class="btn btn-primary" id="enableHand" type="button" title="启用手势" aria-label="启用手势">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 11V5.6a1.6 1.6 0 0 1 3.2 0V10m0-1.5V4.6a1.6 1.6 0 0 1 3.2 0V10m0-1.1V6a1.6 1.6 0 0 1 3.2 0v7.1c0 4.4-2.7 7.4-6.8 7.4-2.2 0-3.9-.9-5-2.4L3.3 15a1.7 1.7 0 0 1 2.4-2.4L8 14.8V11Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>启用手势</span>
+          </button>
+          <button class="icon-btn" id="resetField" type="button" title="重置" aria-label="重置">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4.8 9.3A7.8 7.8 0 1 1 6.6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M4.5 4.8v4.7h4.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="camera-chip" id="cameraChip" aria-hidden="true">
+        <video id="cameraFeed" playsinline muted></video>
+        <canvas id="handOverlay"></canvas>
+        <span>Hand mesh</span>
+      </div>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
+
+    (() => {
+      const stage = document.getElementById('stage3d');
+      const enableHand = document.getElementById('enableHand');
+      const resetField = document.getElementById('resetField');
+      const modeSwitch = document.getElementById('modeSwitch');
+      const modeButtons = Array.from(document.querySelectorAll('[data-mode]'));
+      const inputState = document.getElementById('inputState');
+      const gestureState = document.getElementById('gestureState');
+      const modeCaption = document.getElementById('modeCaption');
+      const pointsState = document.getElementById('pointsState');
+      const fpsState = document.getElementById('fpsState');
+      const modeState = document.getElementById('modeState');
+      const energyState = document.getElementById('energyState');
+      const depthState = document.getElementById('depthState');
+      const signalState = document.getElementById('signalState');
+      const systemState = document.getElementById('systemState');
+      const liveDot = document.getElementById('liveDot');
+      const panelLiveDot = document.getElementById('panelLiveDot');
+      const video = document.getElementById('cameraFeed');
+      const cameraChip = document.getElementById('cameraChip');
+      const handOverlay = document.getElementById('handOverlay');
+      const handCtx = handOverlay.getContext('2d');
+      const voiceCanvas = document.getElementById('voiceWaveCanvas');
+      const voiceCtx = voiceCanvas.getContext('2d', { alpha: true });
+      const voiceVisual = document.querySelector('.voice-visual');
+      const voiceOrchestrator = document.getElementById('voiceOrchestrator');
+      const voiceModeLabel = document.getElementById('voiceModeLabel');
+      const voiceDemoToggle = document.getElementById('voiceDemoToggle');
+      const voiceInterrupt = document.getElementById('voiceInterrupt');
+      const desktopCloseButton = document.getElementById('desktopCloseButton');
+      const desktopClickThroughToggle = document.getElementById('desktopClickThroughToggle');
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const smoothstep = (min, max, value) => {
+        const t = clamp((value - min) / Math.max(0.0001, max - min), 0, 1);
+        return t * t * (3 - 2 * t);
+      };
+      const random = (min, max) => min + Math.random() * (max - min);
+      const distance2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      const isDesktopShell = document.documentElement.classList.contains('is-desktop-shell');
+      const modeLabels = {
+        auto: '自动',
+        orbit: '轨道',
+        nebula: '星云',
+        gather: '聚合',
+        spin: '旋球',
+        wave: '扩散',
+        vortex: '漩涡',
+        heart: '爱心',
+        ok: 'OK',
+        like: '点赞',
+        lift: '上推',
+        press: '下压',
+	        type: '成字'
+      };
+      const modeCaptions = {
+        orbit: 'ORBIT / STABLE',
+        nebula: 'NEBULA / DRIFT',
+        gather: 'SPHERE / LOCKED',
+        spin: 'SPHERE / SWIPE',
+        wave: 'WAVE / EXPANSION',
+        vortex: 'VORTEX / ROTATION',
+        heart: 'HEART / LOVE',
+        ok: 'OK / LETTERS',
+        like: 'LIKE / SHAPE',
+        lift: 'PALM / LIFT',
+        press: 'PALM / PRESS',
+	        type: 'TYPE / LOCKED'
+      };
+      const urlMode = new URLSearchParams(window.location.search).get('mode');
+      const initialMode = Object.prototype.hasOwnProperty.call(modeLabels, urlMode) ? urlMode : 'auto';
+
+      const state = {
+        width: 1,
+        height: 1,
+        worldWidth: 8,
+        worldHeight: 5,
+        manualMode: initialMode,
+        pointerInside: false,
+        pointerDown: false,
+        cameraActive: false,
+        handBusy: false,
+        handModel: null,
+        lastHandAt: 0,
+        lastFrame: performance.now(),
+        fps: 60,
+        activeMode: null,
+        previousMode: null,
+        modeChangedAt: performance.now()
+      };
+
+      const voiceWave = {
+        width: 0,
+        height: 0,
+        dpr: 1,
+        level: 0.28,
+        energy: 0,
+        span: 0.64
+      };
+
+      const voiceProfiles = {
+        idle: {
+          label: '待机',
+          base: 0.16,
+          gain: 0.22,
+          speed: 0.62,
+          fill: 0.52,
+          stroke: 0.58,
+          line: 0.54,
+          thickness: 0.84
+        },
+        connecting: {
+          label: '连接',
+          base: 0.2,
+          gain: 0.16,
+          speed: 0.44,
+          fill: 0.58,
+          stroke: 0.62,
+          line: 0.62,
+          thickness: 0.86
+        },
+        listening: {
+          label: '聆听',
+          base: 0.38,
+          gain: 0.74,
+          speed: 1.08,
+          fill: 1.08,
+          stroke: 1.12,
+          line: 1,
+          thickness: 1.12
+        },
+        thinking: {
+          label: '思考',
+          base: 0.26,
+          gain: 0.3,
+          speed: 0.38,
+          fill: 0.7,
+          stroke: 0.76,
+          line: 0.72,
+          thickness: 0.92
+        },
+        speaking: {
+          label: '回复',
+          base: 0.34,
+          gain: 0.6,
+          speed: 0.76,
+          fill: 1,
+          stroke: 1.08,
+          line: 0.92,
+          thickness: 1.08
+        },
+        interrupt: {
+          label: '打断',
+          base: 0.5,
+          gain: 0.5,
+          speed: 1.18,
+          fill: 1.04,
+          stroke: 1.12,
+          line: 1,
+          thickness: 0.86
+        },
+        error: {
+          label: '错误',
+          base: 0.22,
+          gain: 0.26,
+          speed: 0.3,
+          fill: 0.56,
+          stroke: 0.62,
+          line: 0.58,
+          thickness: 0.82
+        }
+      };
+
+      const voiceRuntime = {
+        running: false,
+        starting: false,
+        state: 'idle',
+        stateStartedAt: performance.now(),
+        socket: null,
+        stream: null,
+        captureContext: null,
+        captureSource: null,
+        captureProcessor: null,
+        captureMute: null,
+        playbackContext: null,
+        playbackTime: 0,
+        micEnergy: 0,
+        outputEnergy: 0,
+        lastMicVoiceAt: 0,
+        micSpeechActive: false,
+        errorMessage: ''
+      };
+
+      const pointer = { x: 0.5, y: 0.5, strength: 0.18 };
+      const hand = {
+        x: 0.5,
+        y: 0.5,
+        strength: 0,
+        active: false,
+        pinching: false,
+        fist: false,
+        twoFinger: false,
+        heart: false,
+        vortex: false,
+        heartConfidence: 0,
+        ok: false,
+        okConfidence: 0,
+        like: false,
+        likeConfidence: 0,
+        lift: false,
+        press: false,
+	        open: 0,
+        twoHands: false,
+        twoHandDistance: 0,
+        gestureMode: 'nebula',
+        pendingMode: 'nebula',
+        pendingSince: performance.now(),
+        gestureLockedAt: performance.now(),
+        lastGestureX: 0.5,
+        lastGestureY: 0.5,
+        hasMotionSample: false,
+        motionX: 0,
+        motionY: 0,
+        speed: 0,
+        lastPalmAngle: 0,
+        spin: 0,
+        spinVelocity: 0,
+        sphereSpin: 0
+      };
+
+      const bones = [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [0, 9], [9, 10], [10, 11], [11, 12],
+        [0, 13], [13, 14], [14, 15], [15, 16],
+        [0, 17], [17, 18], [18, 19], [19, 20]
+      ];
+
+      setupVoiceRuntimeControls();
+      setupDesktopShellControls();
+	      setVoiceMode('idle');
+	      requestAnimationFrame(animateVoiceWave);
+
+      if (!THREE) {
+        stage.innerHTML = '<div class="fallback">Three.js 未加载</div>';
+        inputState.textContent = 'Three.js 未加载';
+        return;
+      }
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(47, 1, 0.1, 100);
+      camera.position.set(0, 0, 9.5);
+
+      let renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: true,
+          powerPreference: 'high-performance'
+        });
+      } catch (error) {
+        stage.innerHTML = '<div class="fallback">WebGL 不可用</div>';
+        inputState.textContent = 'WebGL 不可用';
+        return;
+      }
+      renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      stage.appendChild(renderer.domElement);
+
+      const particleCount = 4200;
+      const positions = new Float32Array(particleCount * 3);
+      const colors = new Float32Array(particleCount * 3);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const typePhrase = '我爱你';
+
+	      const material = new THREE.PointsMaterial({
+	        size: isDesktopShell ? 0.044 : 0.038,
+	        sizeAttenuation: true,
+	        vertexColors: true,
+	        transparent: true,
+	        opacity: isDesktopShell ? 0.96 : 0.88,
+	        blending: isDesktopShell ? THREE.NormalBlending : THREE.AdditiveBlending,
+	        depthWrite: false
+	      });
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+
+	      const particles = [];
+	      let textTargets = [];
+      let heartTargets = [];
+      let okTargets = [];
+      let likeTargets = [];
+
+	      function colorForParticle(particle, i, activeMode) {
+        if (isDesktopShell) {
+          const pulse = (Math.sin(performance.now() * 0.0038 + particle.phase) + 1) / 2;
+          const depth = clamp((particle.z + 3.2) / 6.4, 0, 1);
+          const ink = [0.05, 0.07, 0.07];
+          const teal = [0.02, 0.42, 0.38];
+          const steel = [0.18, 0.24, 0.25];
+          const gold = [0.55, 0.42, 0.18];
+          const rose = [0.62, 0.08, 0.24];
+          const blue = [0.08, 0.28, 0.58];
+          const green = [0.02, 0.46, 0.2];
+          const accent = activeMode === 'heart' ? rose
+            : activeMode === 'ok' ? blue
+              : activeMode === 'like' || activeMode === 'lift' ? green
+                : activeMode === 'press' ? steel
+                  : activeMode === 'type' || activeMode === 'nebula' ? gold
+                    : activeMode === 'vortex' ? steel
+                      : activeMode === 'gather' || activeMode === 'spin' ? [0.06, 0.5, 0.46]
+                      : teal;
+          const vividMode = activeMode === 'heart' || activeMode === 'ok' || activeMode === 'like' || activeMode === 'lift';
+          const mix = clamp(depth * 0.28 + pulse * (vividMode ? 0.46 : 0.34), 0, vividMode ? 0.84 : 0.72);
+          colors[i] = lerp(ink[0], accent[0], mix);
+          colors[i + 1] = lerp(ink[1], accent[1], mix);
+          colors[i + 2] = lerp(ink[2], accent[2], mix);
+          return;
+        }
+
+	        if (activeMode === 'type' || activeMode === 'heart' || activeMode === 'ok' || activeMode === 'like') {
+          const pulse = (Math.sin(performance.now() * 0.0032 + particle.phase) + 1) / 2;
+          if (activeMode === 'heart') {
+            colors[i] = lerp(0.98, 1, pulse);
+            colors[i + 1] = lerp(0.18, 0.48, pulse);
+            colors[i + 2] = lerp(0.36, 0.72, pulse);
+          } else if (activeMode === 'ok') {
+            colors[i] = lerp(0.28, 0.78, pulse);
+            colors[i + 1] = lerp(0.68, 0.96, pulse);
+            colors[i + 2] = 1;
+          } else if (activeMode === 'like') {
+            colors[i] = lerp(0.45, 0.86, pulse);
+            colors[i + 1] = lerp(0.92, 1, pulse);
+            colors[i + 2] = lerp(0.42, 0.66, pulse);
+          } else {
+            colors[i] = 1;
+            colors[i + 1] = lerp(0.48, 0.72, pulse);
+            colors[i + 2] = lerp(0.16, 0.34, pulse);
+          }
+          return;
+        }
+        const cyan = [0.2, 0.94, 0.82];
+        const violet = [0.67, 0.53, 1.0];
+        const gold = [0.96, 0.7, 0.3];
+        const coral = [1.0, 0.42, 0.36];
+        const base = activeMode === 'vortex' ? violet
+          : activeMode === 'wave' || activeMode === 'press' ? coral
+            : activeMode === 'lift' ? gold
+              : activeMode === 'type' ? gold
+                : cyan;
+        const alt = activeMode === 'nebula' ? gold : activeMode === 'gather' || activeMode === 'spin' ? violet : activeMode === 'lift' ? cyan : cyan;
+        const pulse = (Math.sin(performance.now() * 0.004 + particle.phase) + 1) / 2;
+        const depth = clamp((particle.z + 3.2) / 6.4, 0, 1);
+        const mix = clamp(depth * 0.38 + pulse * (activeMode === 'orbit' ? 0.16 : 0.38), 0, 0.92);
+        colors[i] = lerp(base[0], alt[0], mix);
+        colors[i + 1] = lerp(base[1], alt[1], mix);
+        colors[i + 2] = lerp(base[2], alt[2], mix);
+      }
+
+      function viewportWorld() {
+        state.worldHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+        state.worldWidth = state.worldHeight * camera.aspect;
+      }
+
+      function spherePoint(index, total, radius) {
+        const offset = 2 / total;
+        const increment = Math.PI * (3 - Math.sqrt(5));
+        const y = ((index * offset) - 1) + offset / 2;
+        const r = Math.sqrt(1 - y * y);
+        const phi = index * increment;
+        return {
+          x: Math.cos(phi) * r * radius,
+          y: y * radius,
+          z: Math.sin(phi) * r * radius
+        };
+      }
+
+	      function buildTextTargets() {
+        const offscreen = document.createElement('canvas');
+        const scale = 3;
+        offscreen.width = 960 * scale;
+        offscreen.height = 320 * scale;
+        const ctx = offscreen.getContext('2d');
+        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+        ctx.fillStyle = 'rgb(0, 0, 0)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `700 ${144 * scale}px -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`;
+
+        const chars = Array.from(typePhrase);
+        const gap = 32 * scale;
+        const widths = chars.map((char) => ctx.measureText(char).width);
+        const totalWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, chars.length - 1);
+        let cursor = (offscreen.width - totalWidth) / 2;
+        const baseline = offscreen.height * 0.52;
+        chars.forEach((char, index) => {
+          ctx.fillText(char, cursor + widths[index] / 2, baseline);
+          cursor += widths[index] + gap;
+        });
+
+        const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
+        const raw = [];
+        let minX = offscreen.width;
+        let minY = offscreen.height;
+        let maxX = 0;
+        let maxY = 0;
+        const step = 6;
+        for (let y = 0; y < offscreen.height; y += step) {
+          for (let x = 0; x < offscreen.width; x += step) {
+            const alpha = data[(y * offscreen.width + x) * 4 + 3];
+            if (alpha > 38) {
+              const seed = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+              raw.push({ x, y, seed: seed - Math.floor(seed) });
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+          }
+        }
+        if (!raw.length) {
+          textTargets = [];
+          return;
+        }
+
+        raw.sort((a, b) => a.seed - b.seed);
+        const glyphWidth = Math.max(1, maxX - minX);
+        const glyphHeight = Math.max(1, maxY - minY);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const targetWidth = Math.min(state.worldWidth * 0.72, state.worldHeight * 2.45);
+        const targetHeight = targetWidth * (glyphHeight / glyphWidth) * 1.05;
+        const targets = [];
+        for (let i = 0; i < particleCount; i += 1) {
+          const source = raw[Math.floor((i / particleCount) * raw.length) % raw.length];
+          targets.push({
+            x: ((source.x - centerX) / glyphWidth) * targetWidth + random(-0.035, 0.035),
+            y: ((centerY - source.y) / glyphHeight) * targetHeight + random(-0.028, 0.028),
+            z: random(-0.12, 0.12)
+          });
+        }
+	        textTargets = targets;
+	      }
+
+      function buildHeartTargets() {
+        const outline = [];
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+
+        for (let i = 0; i < 720; i += 1) {
+          const t = (i / 720) * Math.PI * 2;
+          const x = 16 * Math.pow(Math.sin(t), 3);
+          const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+          outline.push({ x, y });
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+        }
+
+        const targetWidth = Math.min(state.worldWidth * 0.3, state.worldHeight * 0.62);
+        const targetHeight = targetWidth * 0.92;
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const width = Math.max(1, maxX - minX);
+        const height = Math.max(1, maxY - minY);
+        const targets = [];
+
+        for (let i = 0; i < particleCount; i += 1) {
+          const seedA = Math.sin(i * 12.9898) * 43758.5453;
+          const seedB = Math.sin(i * 78.233) * 19754.217;
+          const seedC = Math.sin(i * 37.719) * 31415.926;
+          const a = seedA - Math.floor(seedA);
+          const b = seedB - Math.floor(seedB);
+          const c = seedC - Math.floor(seedC);
+          const t = ((i * 0.61803398875 + a * 0.075) % 1) * Math.PI * 2;
+          const rawX = 16 * Math.pow(Math.sin(t), 3);
+          const rawY = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+          const edgeX = ((rawX - centerX) / width) * targetWidth;
+          const edgeY = ((rawY - centerY) / height) * targetHeight;
+          const band = a < 0.72 ? 1 + (b - 0.5) * 0.085 : a < 0.9 ? 0.38 + b * 0.52 : 1.02 + b * 0.16;
+          const jitter = a < 0.72 ? 0.018 : a < 0.9 ? 0.035 : 0.07;
+
+          targets.push({
+            x: edgeX * band + (b - 0.5) * jitter,
+            y: edgeY * band + (c - 0.5) * jitter - targetHeight * 0.02,
+            z: (c - 0.5) * (a < 0.9 ? 0.16 : 0.32)
+          });
+        }
+
+        heartTargets = targets;
+      }
+
+      function buildSymbolTargets(symbol, scaleRatio = 0.5) {
+        const offscreen = document.createElement('canvas');
+        const scale = 3;
+        offscreen.width = 520 * scale;
+        offscreen.height = 520 * scale;
+        const ctx = offscreen.getContext('2d');
+        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${292 * scale}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", -apple-system, BlinkMacSystemFont, sans-serif`;
+        ctx.fillText(symbol, offscreen.width / 2, offscreen.height * 0.54);
+
+        const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
+        const raw = [];
+        let minX = offscreen.width;
+        let minY = offscreen.height;
+        let maxX = 0;
+        let maxY = 0;
+        const step = 7;
+        for (let y = 0; y < offscreen.height; y += step) {
+          for (let x = 0; x < offscreen.width; x += step) {
+            const alpha = data[(y * offscreen.width + x) * 4 + 3];
+            if (alpha > 42) {
+              const seed = Math.sin(x * 23.17 + y * 71.43) * 57913.173;
+              raw.push({ x, y, seed: seed - Math.floor(seed) });
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+          }
+        }
+
+        if (!raw.length) return [];
+
+        raw.sort((a, b) => a.seed - b.seed);
+        const glyphWidth = Math.max(1, maxX - minX);
+        const glyphHeight = Math.max(1, maxY - minY);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const targetWidth = Math.min(state.worldWidth * scaleRatio, state.worldHeight * scaleRatio * 1.08);
+        const targetHeight = targetWidth * (glyphHeight / glyphWidth);
+        const targets = [];
+
+        for (let i = 0; i < particleCount; i += 1) {
+          const source = raw[Math.floor((i / particleCount) * raw.length) % raw.length];
+          const seedA = Math.sin(i * 17.31) * 9137.77;
+          const seedB = Math.sin(i * 41.91) * 27871.61;
+          const jitterX = (seedA - Math.floor(seedA) - 0.5) * 0.028;
+          const jitterY = (seedB - Math.floor(seedB) - 0.5) * 0.028;
+          targets.push({
+            x: ((source.x - centerX) / glyphWidth) * targetWidth + jitterX,
+            y: ((centerY - source.y) / glyphHeight) * targetHeight + jitterY,
+            z: random(-0.1, 0.1)
+          });
+        }
+
+        return targets;
+      }
+
+      function buildLetterTargets(text, scaleRatio = 0.38) {
+        const offscreen = document.createElement('canvas');
+        const scale = 3;
+        offscreen.width = 820 * scale;
+        offscreen.height = 360 * scale;
+        const ctx = offscreen.getContext('2d');
+        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+        ctx.fillStyle = 'rgb(0, 0, 0)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `800 ${214 * scale}px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
+
+        const chars = Array.from(text);
+        const gap = 18 * scale;
+        const widths = chars.map((char) => ctx.measureText(char).width);
+        const totalWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, chars.length - 1);
+        let cursor = (offscreen.width - totalWidth) / 2;
+        const baseline = offscreen.height * 0.53;
+        chars.forEach((char, index) => {
+          ctx.fillText(char, cursor + widths[index] / 2, baseline);
+          cursor += widths[index] + gap;
+        });
+
+        const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
+        const raw = [];
+        let minX = offscreen.width;
+        let minY = offscreen.height;
+        let maxX = 0;
+        let maxY = 0;
+        const step = 5;
+        for (let y = 0; y < offscreen.height; y += step) {
+          for (let x = 0; x < offscreen.width; x += step) {
+            const alpha = data[(y * offscreen.width + x) * 4 + 3];
+            if (alpha > 42) {
+              const seed = Math.sin(x * 19.17 + y * 63.71) * 51437.113;
+              raw.push({ x, y, seed: seed - Math.floor(seed) });
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+          }
+        }
+
+        if (!raw.length) return [];
+
+        raw.sort((a, b) => a.seed - b.seed);
+        const glyphWidth = Math.max(1, maxX - minX);
+        const glyphHeight = Math.max(1, maxY - minY);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const targetWidth = Math.min(state.worldWidth * scaleRatio, state.worldHeight * scaleRatio * 1.68);
+        const targetHeight = targetWidth * (glyphHeight / glyphWidth);
+        const targets = [];
+
+        for (let i = 0; i < particleCount; i += 1) {
+          const source = raw[Math.floor((i / particleCount) * raw.length) % raw.length];
+          const seedA = Math.sin(i * 14.73) * 21931.77;
+          const seedB = Math.sin(i * 52.37) * 38713.61;
+          const jitterX = (seedA - Math.floor(seedA) - 0.5) * 0.018;
+          const jitterY = (seedB - Math.floor(seedB) - 0.5) * 0.018;
+          targets.push({
+            x: ((source.x - centerX) / glyphWidth) * targetWidth + jitterX,
+            y: ((centerY - source.y) / glyphHeight) * targetHeight + jitterY,
+            z: random(-0.055, 0.055)
+          });
+        }
+
+        return targets;
+      }
+
+      function buildOkTargets() {
+        return buildLetterTargets('OK', 0.38);
+      }
+
+      function assignTargets() {
+        const radius = Math.min(state.worldWidth, state.worldHeight) * 0.3;
+        for (let i = 0; i < particleCount; i += 1) {
+          const particle = particles[i] || {
+            x: random(-state.worldWidth * 0.3, state.worldWidth * 0.3),
+            y: random(-state.worldHeight * 0.3, state.worldHeight * 0.3),
+            z: random(-2.9, 2.9),
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            phase: random(0, Math.PI * 2)
+          };
+          const ringAngle = (i / particleCount) * Math.PI * 15;
+          const ringRadius = radius * (0.7 + 0.22 * Math.sin(i * 0.047));
+          const vortexAngle = (i / particleCount) * Math.PI * 22;
+          const vortexRadius = radius * (0.15 + 0.84 * ((i % 377) / 377));
+          particle.sphere = spherePoint(i, particleCount, radius * 0.94);
+          particle.ring = {
+            x: Math.cos(ringAngle) * ringRadius,
+            y: Math.sin(ringAngle * 0.7) * radius * 0.48,
+            z: Math.sin(ringAngle) * 1.72
+          };
+          particle.vortex = {
+            angle: vortexAngle,
+            radius: vortexRadius,
+            y: ((i / particleCount) - 0.5) * state.worldHeight * 0.72,
+            z: Math.sin(vortexAngle) * 1.48
+          };
+          particle.scatter = {
+            x: random(-state.worldWidth * 0.5, state.worldWidth * 0.5),
+            y: random(-state.worldHeight * 0.39, state.worldHeight * 0.39),
+            z: random(-3.2, 3.2)
+          };
+          particles[i] = particle;
+        }
+      }
+
+      function resize() {
+        const rect = stage.getBoundingClientRect();
+        state.width = Math.max(320, Math.floor(rect.width));
+        state.height = Math.max(420, Math.floor(rect.height));
+        renderer.setSize(state.width, state.height, false);
+        camera.aspect = state.width / state.height;
+        camera.updateProjectionMatrix();
+	        viewportWorld();
+	        buildTextTargets();
+        buildHeartTargets();
+        okTargets = buildOkTargets();
+        likeTargets = buildSymbolTargets('👍', 0.5);
+	        assignTargets();
+	      }
+
+      function resetParticles(options = {}) {
+        for (const particle of particles) {
+          particle.x = random(-state.worldWidth * 0.5, state.worldWidth * 0.5);
+          particle.y = random(-state.worldHeight * 0.41, state.worldHeight * 0.41);
+          particle.z = random(-3.2, 3.2);
+          particle.vx = 0;
+          particle.vy = 0;
+          particle.vz = 0;
+        }
+        if (!options.keepMode) state.manualMode = 'auto';
+        updateModeButtons();
+      }
+
+      function activeInput() {
+        if (hand.active && hand.strength > 0.04) return hand;
+        return pointer;
+      }
+
+      function setVoiceMode(mode, time = performance.now()) {
+        if (!voiceProfiles[mode]) mode = 'idle';
+        voiceRuntime.state = mode;
+        voiceRuntime.stateStartedAt = time;
+        if (voiceModeLabel) voiceModeLabel.textContent = voiceProfiles[mode].label;
+        if (voiceOrchestrator) voiceOrchestrator.dataset.voiceState = mode;
+        if (voiceVisual) voiceVisual.dataset.voiceState = mode;
+      }
+
+      function setVoiceError(message) {
+        voiceRuntime.errorMessage = message || '实时语音不可用';
+        if (voiceOrchestrator) voiceOrchestrator.title = voiceRuntime.errorMessage;
+        setVoiceMode('error');
+        syncVoiceControls();
+      }
+
+      function syncVoiceControls() {
+        const active = voiceRuntime.running || voiceRuntime.starting;
+        if (voiceDemoToggle) {
+          voiceDemoToggle.textContent = active ? '停止' : '开始';
+          voiceDemoToggle.setAttribute('aria-pressed', String(active));
+        }
+        if (voiceInterrupt) {
+          const canInterrupt = Boolean(
+            voiceRuntime.running &&
+            voiceRuntime.socket &&
+            voiceRuntime.socket.readyState === WebSocket.OPEN
+          );
+          voiceInterrupt.disabled = !canInterrupt;
+        }
+      }
+
+      function resolveVoiceSocketUrl() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.host}/voice`;
+      }
+
+      function bytesToBase64(bytes) {
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+      }
+
+      function base64ToBytes(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      function resampleFloat32(input, sourceRate, targetRate) {
+        if (!input.length || Math.abs(sourceRate - targetRate) < 1) return input;
+        const ratio = sourceRate / targetRate;
+        const length = Math.max(1, Math.round(input.length / ratio));
+        const output = new Float32Array(length);
+        for (let i = 0; i < length; i += 1) {
+          const sourceIndex = i * ratio;
+          const left = Math.floor(sourceIndex);
+          const right = Math.min(input.length - 1, left + 1);
+          const fraction = sourceIndex - left;
+          output[i] = input[left] * (1 - fraction) + input[right] * fraction;
+        }
+        return output;
+      }
+
+      function rmsEnergy(samples) {
+        if (!samples.length) return 0;
+        let sum = 0;
+        for (let i = 0; i < samples.length; i += 1) {
+          sum += samples[i] * samples[i];
+        }
+        return clamp(Math.sqrt(sum / samples.length) * 5.2, 0, 1);
+      }
+
+      function floatToPcm16Base64(samples) {
+        const bytes = new Uint8Array(samples.length * 2);
+        const view = new DataView(bytes.buffer);
+        for (let i = 0; i < samples.length; i += 1) {
+          const value = clamp(samples[i], -1, 1);
+          const int16 = value < 0 ? value * 0x8000 : value * 0x7fff;
+          view.setInt16(i * 2, int16, true);
+        }
+        return bytesToBase64(bytes);
+      }
+
+      function pcm16Base64ToFloat32(base64) {
+        const bytes = base64ToBytes(base64);
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const samples = new Float32Array(Math.floor(bytes.length / 2));
+        for (let i = 0; i < samples.length; i += 1) {
+          samples[i] = view.getInt16(i * 2, true) / 0x8000;
+        }
+        return samples;
+      }
+
+      function stopVoiceCapture() {
+        if (voiceRuntime.captureProcessor) {
+          voiceRuntime.captureProcessor.disconnect();
+          voiceRuntime.captureProcessor.onaudioprocess = null;
+          voiceRuntime.captureProcessor = null;
+        }
+        if (voiceRuntime.captureSource) {
+          voiceRuntime.captureSource.disconnect();
+          voiceRuntime.captureSource = null;
+        }
+        if (voiceRuntime.captureMute) {
+          voiceRuntime.captureMute.disconnect();
+          voiceRuntime.captureMute = null;
+        }
+        if (voiceRuntime.stream) {
+          for (const track of voiceRuntime.stream.getTracks()) track.stop();
+          voiceRuntime.stream = null;
+        }
+        if (voiceRuntime.captureContext && voiceRuntime.captureContext.state !== 'closed') {
+          void voiceRuntime.captureContext.close();
+        }
+        voiceRuntime.captureContext = null;
+        voiceRuntime.micEnergy = 0;
+        voiceRuntime.lastMicVoiceAt = 0;
+        voiceRuntime.micSpeechActive = false;
+      }
+
+      async function startVoiceCapture() {
+        if (voiceRuntime.stream) return;
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('当前浏览器不支持麦克风采集');
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        const context = new AudioCtor({ sampleRate: 16000 });
+        const source = context.createMediaStreamSource(stream);
+        const processor = context.createScriptProcessor(4096, 1, 1);
+        const mute = context.createGain();
+        mute.gain.value = 0;
+
+        processor.onaudioprocess = (event) => {
+          const output = event.outputBuffer.getChannelData(0);
+          output.fill(0);
+          if (!voiceRuntime.running || voiceRuntime.socket?.readyState !== WebSocket.OPEN) return;
+          if (voiceRuntime.state === 'speaking' || voiceRuntime.state === 'thinking') return;
+
+          const input = event.inputBuffer.getChannelData(0);
+          const samples = resampleFloat32(input, context.sampleRate, 16000);
+          const energy = rmsEnergy(samples);
+          const now = performance.now();
+          const voiceThreshold = 0.018;
+          const tailMs = 650;
+
+          voiceRuntime.micEnergy = lerp(voiceRuntime.micEnergy, energy, 0.35);
+          if (energy > voiceThreshold) {
+            voiceRuntime.lastMicVoiceAt = now;
+            voiceRuntime.micSpeechActive = true;
+          }
+          if (!voiceRuntime.micSpeechActive || now - voiceRuntime.lastMicVoiceAt > tailMs) {
+            voiceRuntime.micSpeechActive = false;
+            return;
+          }
+
+          voiceRuntime.socket.send(JSON.stringify({
+            type: 'audio',
+            audio: floatToPcm16Base64(samples)
+          }));
+        };
+
+        source.connect(processor);
+        processor.connect(mute);
+        mute.connect(context.destination);
+        if (context.state === 'suspended') await context.resume();
+
+        voiceRuntime.stream = stream;
+        voiceRuntime.captureContext = context;
+        voiceRuntime.captureSource = source;
+        voiceRuntime.captureProcessor = processor;
+        voiceRuntime.captureMute = mute;
+      }
+
+      function stopVoicePlayback() {
+        if (voiceRuntime.playbackContext && voiceRuntime.playbackContext.state !== 'closed') {
+          void voiceRuntime.playbackContext.close();
+        }
+        voiceRuntime.playbackContext = null;
+        voiceRuntime.playbackTime = 0;
+        voiceRuntime.outputEnergy = 0;
+      }
+
+      function ensurePlaybackContext() {
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!voiceRuntime.playbackContext || voiceRuntime.playbackContext.state === 'closed') {
+          voiceRuntime.playbackContext = new AudioCtor({ sampleRate: 24000 });
+          voiceRuntime.playbackTime = 0;
+        }
+        if (voiceRuntime.playbackContext.state === 'suspended') {
+          void voiceRuntime.playbackContext.resume();
+        }
+        return voiceRuntime.playbackContext;
+      }
+
+      function playVoiceAudio(base64) {
+        const samples = pcm16Base64ToFloat32(base64);
+        if (!samples.length) return;
+
+        const context = ensurePlaybackContext();
+        const buffer = context.createBuffer(1, samples.length, 24000);
+        buffer.copyToChannel(samples, 0);
+
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+
+        const startAt = Math.max(context.currentTime + 0.018, voiceRuntime.playbackTime || 0);
+        source.start(startAt);
+        voiceRuntime.playbackTime = startAt + buffer.duration;
+        voiceRuntime.outputEnergy = Math.max(voiceRuntime.outputEnergy, rmsEnergy(samples));
+        setVoiceMode('speaking');
+
+        source.onended = () => {
+          if (
+            voiceRuntime.running &&
+            voiceRuntime.state === 'speaking' &&
+            context.currentTime >= voiceRuntime.playbackTime - 0.04
+          ) {
+            setVoiceMode('listening');
+          }
+        };
+      }
+
+      function stopVoiceSession(options = {}) {
+        const { socketClosed = false, keepError = false } = options;
+        const socket = voiceRuntime.socket;
+        voiceRuntime.running = false;
+        voiceRuntime.starting = false;
+        voiceRuntime.socket = null;
+        stopVoiceCapture();
+        stopVoicePlayback();
+        syncVoiceControls();
+
+        if (!socketClosed && socket && socket.readyState <= WebSocket.OPEN) {
+          socket.close(1000, 'client-stop');
+        }
+        if (!keepError) {
+          voiceRuntime.errorMessage = '';
+          if (voiceOrchestrator) voiceOrchestrator.title = '';
+          setVoiceMode('idle');
+        }
+      }
+
+      function handleVoiceStatus(status) {
+        if (status === 'connecting') {
+          setVoiceMode('connecting');
+          syncVoiceControls();
+          return;
+        }
+
+        if (status === 'connected') {
+          voiceRuntime.starting = false;
+          setVoiceMode('connecting');
+          syncVoiceControls();
+          return;
+        }
+
+        if (status === 'listening') {
+          voiceRuntime.starting = false;
+          setVoiceMode('listening');
+          syncVoiceControls();
+          startVoiceCapture().catch((error) => {
+            setVoiceError(error instanceof Error ? error.message : '麦克风启动失败');
+            stopVoiceSession({ keepError: true });
+          });
+          return;
+        }
+
+        if (status === 'thinking') {
+          voiceRuntime.starting = false;
+          setVoiceMode('thinking');
+          syncVoiceControls();
+          return;
+        }
+
+        if (status === 'idle' && voiceRuntime.running) {
+          stopVoiceSession();
+        }
+      }
+
+      function handleVoiceServerEvent(event) {
+        if (!event?.type) return;
+        if (event.type === 'input_audio_buffer.speech_started') {
+          setVoiceMode('listening');
+          return;
+        }
+        if (event.type === 'input_audio_buffer.speech_stopped') {
+          setVoiceMode('thinking');
+          return;
+        }
+        if (event.type === 'conversation.item.input_audio_transcription.completed') {
+          setVoiceMode('thinking');
+          return;
+        }
+        if (event.type === 'response.created') {
+          setVoiceMode('thinking');
+          return;
+        }
+        if (event.type === 'response.audio.delta') {
+          const delta = event.delta || event.audio || event.data;
+          if (typeof delta === 'string') playVoiceAudio(delta);
+          return;
+        }
+        if (event.type === 'response.done') {
+          if (voiceRuntime.running) setVoiceMode('listening');
+          return;
+        }
+        if (event.type === 'error') {
+          setVoiceError(event.error?.message || '实时语音服务返回错误');
+        }
+      }
+
+      function handleVoiceSocketMessage(messageEvent) {
+        let payload;
+        try {
+          payload = JSON.parse(messageEvent.data);
+        } catch {
+          return;
+        }
+
+        if (payload.type === 'status') {
+          handleVoiceStatus(payload.status);
+          return;
+        }
+
+        if (payload.type === 'error') {
+          setVoiceError(payload.message || '实时语音连接失败');
+          return;
+        }
+
+        if (payload.type === 'server') {
+          handleVoiceServerEvent(payload.event);
+        }
+      }
+
+      function startVoiceSession() {
+        if (voiceRuntime.running || voiceRuntime.starting) return;
+        if (!window.WebSocket) {
+          setVoiceError('当前浏览器不支持 WebSocket');
+          return;
+        }
+
+        voiceRuntime.running = true;
+        voiceRuntime.starting = true;
+        voiceRuntime.errorMessage = '';
+        if (voiceOrchestrator) voiceOrchestrator.title = '';
+        setVoiceMode('connecting');
+        syncVoiceControls();
+
+        const socket = new WebSocket(resolveVoiceSocketUrl());
+        voiceRuntime.socket = socket;
+
+        socket.addEventListener('open', () => {
+          if (voiceRuntime.socket !== socket) return;
+          setVoiceMode('connecting');
+          syncVoiceControls();
+        });
+
+        socket.addEventListener('message', handleVoiceSocketMessage);
+
+        socket.addEventListener('error', () => {
+          if (voiceRuntime.socket !== socket) return;
+          setVoiceError('实时语音连接失败');
+        });
+
+        socket.addEventListener('close', () => {
+          if (voiceRuntime.socket !== socket) return;
+          const keepError = voiceRuntime.state === 'error';
+          stopVoiceSession({ socketClosed: true, keepError });
+        });
+      }
+
+      function interruptVoiceSession() {
+        if (!voiceRuntime.running || voiceRuntime.socket?.readyState !== WebSocket.OPEN) return;
+        voiceRuntime.socket.send(JSON.stringify({ type: 'interrupt' }));
+        stopVoicePlayback();
+        setVoiceMode('interrupt');
+        window.setTimeout(() => {
+          if (voiceRuntime.running && voiceRuntime.state === 'interrupt') {
+            setVoiceMode('listening');
+          }
+        }, 520);
+      }
+
+      function voiceStateEnergy(time, mode) {
+        const elapsed = Math.max(0, time - voiceRuntime.stateStartedAt);
+        voiceRuntime.micEnergy = lerp(voiceRuntime.micEnergy, 0, 0.012);
+        voiceRuntime.outputEnergy = lerp(voiceRuntime.outputEnergy, 0, 0.028);
+
+        if (mode === 'connecting') {
+          return clamp(0.14 + Math.sin(time * 0.0022) * 0.04, 0.08, 0.2);
+        }
+        if (mode === 'listening') {
+          return clamp(
+            Math.max(voiceRuntime.micEnergy, 0.18 + Math.sin(time * 0.0028) * 0.03),
+            0.1,
+            0.82
+          );
+        }
+        if (mode === 'thinking') {
+          return clamp(0.16 + Math.sin(time * 0.0014) * 0.035, 0.1, 0.24);
+        }
+        if (mode === 'speaking') {
+          return clamp(
+            Math.max(voiceRuntime.outputEnergy, 0.26 + Math.sin(time * 0.0048 + 0.6) * 0.06),
+            0.16,
+            0.68
+          );
+        }
+        if (mode === 'interrupt') {
+          const progress = clamp(elapsed / 520, 0, 1);
+          return lerp(0.92, 0.18, progress);
+        }
+        if (mode === 'error') {
+          return clamp(0.16 + Math.sin(time * 0.003) * 0.025, 0.08, 0.22);
+        }
+        return clamp(0.06 + Math.sin(time * 0.0011) * 0.018, 0.02, 0.1);
+      }
+
+      function voiceSignal(time) {
+        const mode = voiceRuntime.state || 'idle';
+        const profile = voiceProfiles[mode] || voiceProfiles.idle;
+        const targetEnergy = voiceStateEnergy(time, mode);
+        voiceWave.energy = lerp(voiceWave.energy, targetEnergy, mode === 'interrupt' ? 0.18 : 0.065);
+        return { mode, profile, energy: voiceWave.energy };
+      }
+
+	      function setupVoiceRuntimeControls() {
+	        if (voiceDemoToggle) {
+	          voiceDemoToggle.addEventListener('click', () => {
+	            if (voiceRuntime.running || voiceRuntime.starting) stopVoiceSession();
+	            else startVoiceSession();
+          });
+        }
+        if (voiceInterrupt) {
+          voiceInterrupt.addEventListener('click', interruptVoiceSession);
+	        }
+	        syncVoiceControls();
+	      }
+
+      function setupDesktopShellControls() {
+        if (window.desktopShell?.onInteractionMode) {
+          window.desktopShell.onInteractionMode((enabled) => {
+            document.documentElement.dataset.interactionMode = String(Boolean(enabled));
+            if (desktopClickThroughToggle) {
+              desktopClickThroughToggle.setAttribute('aria-pressed', String(Boolean(enabled)));
+            }
+          });
+        }
+
+        if (desktopCloseButton) {
+          desktopCloseButton.addEventListener('click', () => {
+            if (window.desktopShell?.close) {
+              void window.desktopShell.close();
+            } else {
+              window.close();
+            }
+          });
+        }
+
+        if (desktopClickThroughToggle) {
+          desktopClickThroughToggle.addEventListener('click', async () => {
+            if (!window.desktopShell?.toggleClickThrough) return;
+            const enabled = await window.desktopShell.toggleClickThrough();
+            document.documentElement.dataset.interactionMode = String(Boolean(enabled));
+            desktopClickThroughToggle.setAttribute('aria-pressed', String(Boolean(enabled)));
+          });
+        }
+      }
+
+	      function resizeVoiceWave() {
+        const rect = voiceCanvas.getBoundingClientRect();
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const width = Math.max(1, Math.floor(rect.width * dpr));
+        const height = Math.max(1, Math.floor(rect.height * dpr));
+        if (voiceCanvas.width !== width || voiceCanvas.height !== height) {
+          voiceCanvas.width = width;
+          voiceCanvas.height = height;
+        }
+        voiceWave.width = rect.width;
+        voiceWave.height = rect.height;
+        voiceWave.dpr = dpr;
+        voiceCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function voiceWavePoint(x, centerY, amplitude, phase, layer, polarity = 1, startX = 0, endX = voiceWave.width || 1) {
+        const activeWidth = Math.max(1, endX - startX);
+        const nx = clamp((x - startX) / activeWidth, 0, 1);
+        const centered = nx - 0.5;
+        const envelope = Math.pow(Math.sin(nx * Math.PI), 1.18);
+        const drift = Math.sin(nx * Math.PI * (2.2 + layer * 0.28) + phase) * 0.62;
+        const shimmer = Math.sin(nx * Math.PI * (5.1 + layer * 0.33) - phase * 1.28 + layer) * 0.28;
+        const breath = Math.sin(nx * Math.PI * 9.4 + phase * 0.62 + layer * 1.7) * 0.1;
+        return centerY + (drift + shimmer + breath) * amplitude * envelope * polarity;
+      }
+
+      function drawVoiceRibbon(time, layer, level, profile, mode) {
+        const width = voiceWave.width;
+        const height = voiceWave.height;
+        const centerY = height * 0.5;
+        const phase = time * (0.00055 + layer * 0.00006) * profile.speed + layer * 0.74;
+        const amplitude = height * (0.19 + layer * 0.04) * level;
+        const thickness = height * (0.056 + layer * 0.014) * (0.78 + level * 0.28) * profile.thickness;
+        const halfSpan = voiceWave.span * 0.5;
+        const startX = width * (0.5 - halfSpan);
+        const endX = width * (0.5 + halfSpan);
+        const activeWidth = endX - startX;
+        const step = Math.max(6, activeWidth / 64);
+        const top = [];
+        const bottom = [];
+
+        for (let x = startX; x <= endX + 0.5; x += step) {
+          const nx = clamp((x - startX) / activeWidth, 0, 1);
+          const y = voiceWavePoint(x, centerY, amplitude, phase, layer, 1, startX, endX);
+          const falloff = Math.pow(Math.sin(nx * Math.PI), 0.92);
+          top.push({ x, y: y - thickness * falloff });
+          bottom.push({ x, y: y + thickness * falloff });
+        }
+
+        const fill = voiceCtx.createLinearGradient(0, centerY - height * 0.32, 0, centerY + height * 0.32);
+        fill.addColorStop(0, `rgba(255, 255, 255, ${(0.02 + layer * 0.006) * profile.fill})`);
+        fill.addColorStop(0.5, `rgba(245, 245, 247, ${(0.14 - layer * 0.008) * profile.fill})`);
+        fill.addColorStop(1, `rgba(168, 205, 198, ${(0.026 + layer * 0.005) * profile.fill})`);
+
+        voiceCtx.beginPath();
+        voiceCtx.moveTo(top[0].x, top[0].y);
+        for (let i = 1; i < top.length; i += 1) {
+          const midX = (top[i - 1].x + top[i].x) / 2;
+          const midY = (top[i - 1].y + top[i].y) / 2;
+          voiceCtx.quadraticCurveTo(top[i - 1].x, top[i - 1].y, midX, midY);
+        }
+        for (let i = bottom.length - 1; i >= 0; i -= 1) {
+          const point = bottom[i];
+          voiceCtx.lineTo(point.x, point.y);
+        }
+        voiceCtx.closePath();
+        voiceCtx.fillStyle = fill;
+        voiceCtx.fill();
+
+        voiceCtx.beginPath();
+        voiceCtx.moveTo(startX, voiceWavePoint(startX, centerY, amplitude, phase, layer, 1, startX, endX));
+        for (let x = startX + step; x <= endX + 0.5; x += step) {
+          const prevX = x - step;
+          const xMid = prevX + step / 2;
+          const yMid = voiceWavePoint(xMid, centerY, amplitude, phase, layer, 1, startX, endX);
+          const y = voiceWavePoint(x, centerY, amplitude, phase, layer, 1, startX, endX);
+          voiceCtx.quadraticCurveTo(xMid, yMid, x, y);
+        }
+        voiceCtx.lineWidth = layer === 0 ? 1.55 : 0.98;
+        voiceCtx.strokeStyle = layer === 0
+          ? `rgba(255, 255, 255, ${(0.58 + level * 0.2) * profile.stroke})`
+          : `rgba(232, 238, 236, ${Math.max(0.04, (0.3 - layer * 0.026) * profile.stroke)})`;
+        voiceCtx.stroke();
+
+        for (const polarity of [-1, 1]) {
+          voiceCtx.beginPath();
+          const polarityOffset = mode === 'speaking' ? polarity * 0.24 : polarity * 0.52;
+          voiceCtx.moveTo(startX, voiceWavePoint(startX, centerY, amplitude * 0.74, phase + polarityOffset, layer + 0.35, polarity, startX, endX));
+          for (let x = startX + step; x <= endX + 0.5; x += step) {
+            const prevX = x - step;
+            const xMid = prevX + step / 2;
+            const yMid = voiceWavePoint(xMid, centerY, amplitude * 0.74, phase + polarityOffset, layer + 0.35, polarity, startX, endX);
+            const y = voiceWavePoint(x, centerY, amplitude * 0.74, phase + polarityOffset, layer + 0.35, polarity, startX, endX);
+            voiceCtx.quadraticCurveTo(xMid, yMid, x, y);
+          }
+          voiceCtx.lineWidth = layer < 2 ? 1.12 : 0.76;
+          voiceCtx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0.038, (0.27 - layer * 0.032) * profile.stroke)})`;
+          voiceCtx.stroke();
+        }
+      }
+
+      function drawVoiceWave(time) {
+        resizeVoiceWave();
+        const width = voiceWave.width;
+        const height = voiceWave.height;
+        if (!width || !height) return;
+
+        const signal = voiceSignal(time);
+        const profile = signal.profile;
+        const target = profile.base + clamp(signal.energy, 0, 1) * profile.gain;
+        voiceWave.level = lerp(voiceWave.level, target, signal.mode === 'interrupt' ? 0.14 : 0.045);
+        const level = voiceWave.level;
+        const centerY = height * 0.5;
+        const halfSpan = voiceWave.span * 0.5;
+        const startX = width * (0.5 - halfSpan);
+        const endX = width * (0.5 + halfSpan);
+
+        voiceCtx.clearRect(0, 0, width, height);
+        voiceCtx.globalCompositeOperation = 'screen';
+
+        for (let layer = 5; layer >= 0; layer -= 1) {
+          drawVoiceRibbon(time, layer, level, profile, signal.mode);
+        }
+
+        const line = voiceCtx.createLinearGradient(startX, 0, endX, 0);
+        line.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        line.addColorStop(0.16, `rgba(245, 245, 247, ${0.18 * profile.line})`);
+        line.addColorStop(0.5, `rgba(255, 255, 255, ${(0.54 + level * 0.16) * profile.line})`);
+        line.addColorStop(0.84, `rgba(245, 245, 247, ${0.18 * profile.line})`);
+        line.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        voiceCtx.globalCompositeOperation = 'lighter';
+        voiceCtx.lineWidth = 1.08;
+        voiceCtx.strokeStyle = line;
+        voiceCtx.beginPath();
+        voiceCtx.moveTo(startX, centerY);
+        voiceCtx.lineTo(endX, centerY);
+        voiceCtx.stroke();
+        voiceCtx.globalCompositeOperation = 'source-over';
+      }
+
+      function animateVoiceWave(time) {
+        drawVoiceWave(time);
+        requestAnimationFrame(animateVoiceWave);
+      }
+
+      function clearHandGesture() {
+        hand.active = false;
+        hand.heart = false;
+        hand.vortex = false;
+        hand.heartConfidence = 0;
+        hand.ok = false;
+        hand.okConfidence = 0;
+        hand.like = false;
+        hand.likeConfidence = 0;
+        hand.lift = false;
+        hand.press = false;
+        hand.pinching = false;
+        hand.fist = false;
+        hand.twoFinger = false;
+        hand.twoHands = false;
+        hand.gestureMode = 'nebula';
+        hand.pendingMode = 'nebula';
+        hand.pendingSince = performance.now();
+        hand.gestureLockedAt = performance.now();
+        hand.hasMotionSample = false;
+        hand.motionX = 0;
+        hand.motionY = 0;
+        hand.speed = 0;
+        hand.spin = 0;
+        hand.spinVelocity = 0;
+        hand.sphereSpin = 0;
+      }
+
+      function gestureDwell(mode) {
+        if (mode === 'heart') return 220;
+        if (mode === 'ok') return 220;
+        if (mode === 'like') return 280;
+        if (mode === 'lift' || mode === 'press') return 140;
+        if (mode === 'type') return 150;
+        if (mode === 'vortex') return 190;
+        if (mode === 'wave') return 150;
+        if (mode === 'gather') return 110;
+        if (mode === 'spin') return 140;
+        return 240;
+      }
+
+      function gestureHold(mode) {
+        if (mode === 'heart') return 640;
+        if (mode === 'ok') return 580;
+        if (mode === 'like') return 680;
+        if (mode === 'lift' || mode === 'press') return 360;
+        if (mode === 'type') return 520;
+        if (mode === 'vortex') return 460;
+        if (mode === 'wave') return 320;
+        if (mode === 'gather') return 300;
+        if (mode === 'spin') return 360;
+        return 180;
+      }
+
+      function updateHandGesture(candidateMode, now) {
+        if (candidateMode !== hand.pendingMode) {
+          hand.pendingMode = candidateMode;
+          hand.pendingSince = now;
+        }
+
+        if (candidateMode === hand.gestureMode) return hand.gestureMode;
+
+        const pendingLongEnough = now - hand.pendingSince >= gestureDwell(candidateMode);
+        const currentHeldEnough = now - hand.gestureLockedAt >= gestureHold(hand.gestureMode);
+        if (pendingLongEnough && currentHeldEnough) {
+          hand.gestureMode = candidateMode;
+          hand.gestureLockedAt = now;
+        }
+        return hand.gestureMode;
+      }
+
+      function resolveMode() {
+        if (state.manualMode !== 'auto') return state.manualMode;
+        if (hand.active) {
+          return hand.gestureMode || 'nebula';
+        }
+        if (state.pointerDown) return 'gather';
+        return state.pointerInside ? 'nebula' : 'orbit';
+      }
+
+      function updateModeButtons() {
+        for (const button of modeButtons) {
+          button.setAttribute('aria-pressed', String(button.dataset.mode === state.manualMode));
+        }
+        requestAnimationFrame(syncModeIndicator);
+        modeState.textContent = modeLabels[state.manualMode] || '自动';
+      }
+
+      function syncModeIndicator() {
+        const activeButton = modeButtons.find((button) => button.dataset.mode === state.manualMode) || modeButtons[0];
+        if (!modeSwitch || !activeButton) return;
+        const switchRect = modeSwitch.getBoundingClientRect();
+        const activeRect = activeButton.getBoundingClientRect();
+        modeSwitch.style.setProperty('--indicator-x', `${activeRect.left - switchRect.left}px`);
+        modeSwitch.style.setProperty('--indicator-w', `${activeRect.width}px`);
+      }
+
+      function targetForParticle(particle, index, time, activeMode) {
+        if (activeMode === 'gather' || activeMode === 'spin') return particle.sphere;
+        if (activeMode === 'nebula') {
+          return {
+            x: particle.scatter.x * 0.64 + Math.cos(time * 0.0009 + particle.phase) * 1.18,
+            y: particle.scatter.y * 0.56 + Math.sin(time * 0.0012 + particle.phase) * 0.62,
+            z: particle.scatter.z * 0.88 + Math.cos(time * 0.0011 + particle.phase * 0.7) * 1.0
+          };
+        }
+        if (activeMode === 'wave') {
+          return {
+            x: particle.scatter.x * 0.9,
+            y: particle.scatter.y * 0.84 + Math.sin(time * 0.0022 + particle.phase) * 0.48,
+            z: particle.scatter.z * 0.94 + Math.cos(time * 0.0028 + particle.phase) * 0.82
+          };
+        }
+        if (activeMode === 'lift') {
+          const elapsed = time - state.modeChangedAt;
+          const lift = smoothstep(0, 620, elapsed);
+          return {
+            x: particle.scatter.x * (0.78 - lift * 0.12) + Math.sin(time * 0.0018 + particle.phase) * 0.12,
+            y: particle.scatter.y * 0.58 + state.worldHeight * (0.12 + lift * 0.22) + Math.sin(time * 0.002 + particle.phase) * 0.22,
+            z: particle.scatter.z * 0.82 + Math.cos(time * 0.0023 + particle.phase) * 0.48
+          };
+        }
+        if (activeMode === 'press') {
+          const elapsed = time - state.modeChangedAt;
+          const press = smoothstep(0, 620, elapsed);
+          return {
+            x: particle.scatter.x * (0.9 - press * 0.25),
+            y: particle.scatter.y * (0.32 - press * 0.08) - state.worldHeight * (0.14 + press * 0.18),
+            z: particle.scatter.z * (0.46 - press * 0.12) + Math.sin(time * 0.0025 + particle.phase) * 0.22
+          };
+        }
+        if (activeMode === 'vortex') {
+          const input = activeInput();
+          const center = hand.active ? worldFromInput(input) : { x: 0, y: 0 };
+          const elapsed = time - state.modeChangedAt;
+          const entry = 1 - clamp(elapsed / 720, 0, 1);
+          const angle = particle.vortex.angle + time * (0.0019 + input.strength * 0.0009) + particle.phase * 0.038 + entry * 2.4;
+          const radius = particle.vortex.radius * (1 + entry * 0.62);
+          return {
+            x: Math.cos(angle) * radius + center.x * 0.28,
+            y: particle.vortex.y + Math.sin(angle * 1.4) * (0.38 + entry * 0.18) + center.y * 0.2,
+            z: particle.vortex.z + Math.sin(angle) * (1.26 + entry * 0.52)
+          };
+        }
+        if ((activeMode === 'ok' && okTargets.length) || (activeMode === 'like' && likeTargets.length)) {
+          const targets = activeMode === 'ok' ? okTargets : likeTargets;
+          const symbol = targets[index % targets.length];
+          const elapsed = time - state.modeChangedAt;
+          const localDelay = (particle.phase / (Math.PI * 2)) * 150;
+          const t = clamp((elapsed - localDelay) / 680, 0, 1);
+          const ease = 1 - Math.pow(1 - t, 3);
+          const entry = 1 - ease;
+          const swirl = activeMode === 'ok' ? 0.024 : 0.16;
+          const rise = activeMode === 'like' ? 0.18 * entry : 0;
+          const entryScale = activeMode === 'ok' ? 1 + entry * 0.055 : 1 + entry * 0.32;
+          return {
+            x: symbol.x * entryScale + Math.cos(particle.phase + time * 0.0032) * swirl * entry,
+            y: symbol.y * entryScale + Math.sin(particle.phase * 1.35 + time * 0.0026) * swirl * 0.68 * entry + rise,
+            z: symbol.z + Math.sin(particle.phase + time * 0.003) * (activeMode === 'ok' ? 0.08 : 0.42) * entry
+          };
+        }
+        if (activeMode === 'heart' && heartTargets.length) {
+          const heart = heartTargets[index % heartTargets.length];
+          const elapsed = time - state.modeChangedAt;
+          const localDelay = (particle.phase / (Math.PI * 2)) * 180;
+          const t = clamp((elapsed - localDelay) / 760, 0, 1);
+          const ease = 1 - Math.pow(1 - t, 3);
+          const spiral = (1 - ease) * (2.15 + Math.sin(particle.phase) * 0.55);
+          const orbit = 0.32 * (1 - ease);
+          const scale = 1 + (1 - ease) * 0.58;
+          return {
+            x: heart.x * scale + Math.cos(particle.phase + spiral + time * 0.0042) * orbit,
+            y: heart.y * scale + Math.sin(particle.phase * 1.4 + spiral + time * 0.0036) * orbit * 0.68,
+            z: heart.z + Math.sin(particle.phase + time * 0.0048) * 0.5 * (1 - ease)
+          };
+        }
+        if (activeMode === 'type' && textTargets.length) return textTargets[index % textTargets.length];
+        return particle.ring;
+      }
+
+      function worldFromInput(input) {
+        return {
+          x: (input.x - 0.5) * state.worldWidth,
+          y: (0.5 - input.y) * state.worldHeight
+        };
+      }
+
+      function updateParticles(time, activeMode) {
+        const input = activeInput();
+        const focus = worldFromInput(input);
+        const radius = 0.95 + input.strength * 2.35;
+        const isSphereMode = activeMode === 'gather' || activeMode === 'spin';
+        const magneticSign = isSphereMode ? -1 : 1;
+        const isTypeMode = activeMode === 'type';
+        const isHeartMode = activeMode === 'heart';
+        const isSymbolMode = activeMode === 'ok' || activeMode === 'like';
+        const isShapeMode = isTypeMode || isHeartMode || isSymbolMode || isSphereMode;
+        const hasLiveInput = hand.active || state.pointerInside || state.pointerDown;
+        const shapeEntrance = isShapeMode ? 1 - clamp((time - state.modeChangedAt) / 900, 0, 1) : 0;
+
+        for (let i = 0; i < particleCount; i += 1) {
+          const particle = particles[i];
+          const target = targetForParticle(particle, i, time, activeMode);
+          const shapeFloatX = isHeartMode ? 0.038 : isSymbolMode ? 0.032 : isSphereMode ? 0.014 : 0.026;
+          const shapeFloatY = isHeartMode ? 0.03 : isSymbolMode ? 0.026 : isSphereMode ? 0.012 : 0.02;
+          const floatX = isShapeMode ? Math.sin(time * 0.001 + particle.phase) * (shapeFloatX + shapeEntrance * 0.034) : Math.sin(time * 0.0011 + particle.phase) * 0.09;
+          const floatY = isShapeMode ? Math.cos(time * 0.0012 + particle.phase) * (shapeFloatY + shapeEntrance * 0.028) : Math.cos(time * 0.0014 + particle.phase) * 0.07;
+
+          const shapeStiffness = isHeartMode ? 0.046 : isSymbolMode ? 0.044 : isSphereMode ? 0.048 : 0.04;
+          let ax = (target.x + floatX - particle.x) * (isShapeMode ? shapeStiffness + shapeEntrance * 0.016 : 0.018);
+          let ay = (target.y + floatY - particle.y) * (isShapeMode ? shapeStiffness + shapeEntrance * 0.016 : 0.018);
+          let az = (target.z - particle.z) * (isShapeMode ? (isHeartMode ? 0.036 : isSphereMode ? 0.038 : 0.034) + shapeEntrance * 0.012 : 0.016);
+
+          const dx = particle.x - focus.x;
+          const dy = particle.y - focus.y;
+          const dz = particle.z * 0.32;
+          const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+          const interactionRadius = isShapeMode ? (isHeartMode ? 0.52 + input.strength * 0.74 : isSymbolMode ? 0.58 + input.strength * 0.7 : isSphereMode ? 0.5 : 0.74 + input.strength * 1.35) : radius;
+          if ((!isShapeMode || (hasLiveInput && !isHeartMode && !isSymbolMode && !isSphereMode)) && distance < interactionRadius) {
+            const force = isShapeMode
+              ? (1 - distance / interactionRadius) * (0.006 + input.strength * 0.03)
+              : (1 - distance / interactionRadius) * (0.02 + input.strength * 0.075);
+            const sign = isShapeMode ? 1 : magneticSign;
+            ax += (dx / distance) * force * sign;
+            ay += (dy / distance) * force * sign;
+            az += (dz / distance) * force * (isShapeMode ? 0.16 : 0.42);
+          }
+
+          particle.vx = (particle.vx + ax) * (isShapeMode ? (isHeartMode || isSymbolMode || isSphereMode ? 0.82 + shapeEntrance * 0.02 : 0.84) : 0.9);
+          particle.vy = (particle.vy + ay) * (isShapeMode ? (isHeartMode || isSymbolMode || isSphereMode ? 0.82 + shapeEntrance * 0.02 : 0.84) : 0.9);
+          particle.vz = (particle.vz + az) * (isShapeMode ? (isHeartMode || isSymbolMode || isSphereMode ? 0.84 + shapeEntrance * 0.02 : 0.86) : 0.91);
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.z += particle.vz;
+
+          const offset = i * 3;
+          positions[offset] = particle.x;
+          positions[offset + 1] = particle.y;
+          positions[offset + 2] = particle.z;
+          colorForParticle(particle, offset, activeMode);
+        }
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.color.needsUpdate = true;
+      }
+
+      function updateLabels(activeMode) {
+        const now = performance.now();
+        if (hand.active && now - state.lastHandAt > 650) {
+          clearHandGesture();
+          hand.strength = 0;
+          pointsState.textContent = '0';
+        }
+
+        const input = activeInput();
+        const energy = Math.round(clamp(input.strength, 0, 1) * 100);
+        energyState.textContent = `${energy}%`;
+        signalState.textContent = `${energy}%`;
+        depthState.textContent = activeMode === 'type' ? '0.8'
+          : activeMode === 'heart' || activeMode === 'ok' ? '0.6'
+            : activeMode === 'like' || activeMode === 'lift' ? '2.2'
+              : activeMode === 'press' ? '1.4'
+                : activeMode === 'vortex' ? '4.1'
+                  : activeMode === 'gather' || activeMode === 'spin' ? '1.8'
+                    : '3.0';
+        modeCaption.textContent = modeCaptions[activeMode] || 'ORBIT / READY';
+        modeState.textContent = state.manualMode === 'auto' ? modeLabels[activeMode] : modeLabels[state.manualMode];
+
+        let label = '待机';
+        if (state.manualMode !== 'auto') {
+          inputState.textContent = hand.active ? '手势识别' : (state.cameraActive ? '等待手势' : '指针备用');
+          label = modeLabels[activeMode] || '待机';
+        } else if (hand.active) {
+          inputState.textContent = '手势识别';
+          if (activeMode === 'heart') label = '比心爱心';
+          else if (activeMode === 'ok') label = 'OK 字母';
+          else if (activeMode === 'like') label = '👍形态';
+          else if (activeMode === 'lift') label = '上推上浮';
+          else if (activeMode === 'press') label = '下压沉降';
+          else if (activeMode === 'spin') label = '双指旋球';
+          else if (activeMode === 'type') label = hand.twoHands ? '双手成字' : '成字';
+          else if (hand.fist) label = '握拳聚合';
+          else if (hand.pinching) label = '捏合聚合';
+          else if (activeMode === 'vortex') label = '旋掌漩涡';
+          else if (hand.open > 0.66) label = '张掌扩散';
+          else label = '手势牵引';
+        } else {
+          inputState.textContent = state.cameraActive ? '等待手势' : '指针备用';
+          if (state.pointerDown) label = '按住聚合';
+          else if (state.pointerInside) label = '指针牵引';
+        }
+
+        const active = hand.active || state.pointerInside || state.pointerDown;
+        liveDot.classList.toggle('is-active', active);
+        panelLiveDot.classList.toggle('is-active', active);
+        systemState.textContent = hand.active ? 'Hand tracking' : active ? 'Pointer signal' : 'Pointer standby';
+        gestureState.textContent = label;
+      }
+
+      function animate(time) {
+        const delta = Math.max(1, time - state.lastFrame);
+        state.lastFrame = time;
+        state.fps = lerp(state.fps, 1000 / delta, 0.06);
+        fpsState.textContent = String(Math.round(state.fps));
+
+        const resolvedMode = resolveMode();
+        if (state.activeMode !== resolvedMode) {
+          state.previousMode = state.activeMode;
+          state.activeMode = resolvedMode;
+          state.modeChangedAt = time;
+        }
+        const activeMode = state.activeMode;
+        updateParticles(time, activeMode);
+        updateLabels(activeMode);
+        const sphereLocked = activeMode === 'gather' || activeMode === 'spin';
+        const shapeLocked = activeMode === 'type' || activeMode === 'heart' || activeMode === 'ok' || activeMode === 'like' || sphereLocked;
+        if (activeMode === 'spin') {
+          hand.sphereSpin += hand.spinVelocity * delta * 0.0015;
+          hand.spinVelocity = lerp(hand.spinVelocity, 0, 0.025);
+        } else {
+          hand.spinVelocity = lerp(hand.spinVelocity, 0, 0.04);
+        }
+        const basePointSize = isDesktopShell ? 0.044 : 0.038;
+        const transitionPulse = Math.max(0, 1 - (time - state.modeChangedAt) / 720);
+        const heartPulse = activeMode === 'heart' ? transitionPulse : 0;
+        const symbolPulse = activeMode === 'ok' || activeMode === 'like' ? transitionPulse : 0;
+        const spherePulse = sphereLocked ? transitionPulse : 0;
+        const vortexPulse = activeMode === 'vortex' ? transitionPulse : 0;
+        const confirmPulse = activeMode === 'ok' || activeMode === 'like' || activeMode === 'lift' || activeMode === 'press' ? transitionPulse : 0;
+        const shapePointSize = activeMode === 'heart'
+          ? (isDesktopShell ? 0.052 : 0.046) + heartPulse * 0.01
+          : activeMode === 'ok' || activeMode === 'like'
+            ? (isDesktopShell ? 0.05 : 0.044) + symbolPulse * 0.008
+            : sphereLocked
+              ? (isDesktopShell ? 0.047 : 0.041) + spherePulse * 0.006
+              : (isDesktopShell ? 0.048 : 0.042);
+        material.size = lerp(material.size, shapeLocked ? shapePointSize : basePointSize + vortexPulse * 0.008 + confirmPulse * 0.006, 0.08);
+        const targetRotationY = activeMode === 'spin'
+          ? hand.sphereSpin + Math.sin(time * 0.00018) * 0.035
+          : activeMode === 'gather'
+            ? Math.sin(time * 0.00012) * 0.045
+            : shapeLocked
+              ? Math.sin(time * 0.00016) * (activeMode === 'heart' ? 0.05 + heartPulse * 0.08 : activeMode === 'ok' ? 0.006 : 0.026)
+              : Math.sin(time * 0.00018) * (activeMode === 'vortex' ? 0.16 + vortexPulse * 0.12 : activeMode === 'ok' ? 0.12 + confirmPulse * 0.08 : 0.1);
+        const targetRotationX = activeMode === 'spin'
+          ? Math.cos(time * 0.00016) * 0.052
+          : activeMode === 'gather'
+            ? Math.cos(time * 0.0001) * 0.026
+            : shapeLocked
+              ? Math.cos(time * 0.00013) * (activeMode === 'heart' ? 0.028 + heartPulse * 0.04 : activeMode === 'ok' ? 0.004 : 0.014)
+              : Math.cos(time * 0.00014) * (activeMode === 'press' ? 0.04 : activeMode === 'vortex' ? 0.1 + vortexPulse * 0.08 : 0.06);
+        const targetRotationZ = activeMode === 'spin'
+          ? Math.sin(time * 0.00013) * 0.018
+          : activeMode === 'gather'
+            ? Math.sin(time * 0.00011) * 0.012
+            : shapeLocked
+              ? Math.sin(time * 0.00011) * (activeMode === 'heart' ? 0.035 + heartPulse * 0.08 : activeMode === 'ok' ? 0.002 : 0.008)
+              : Math.sin(time * 0.00011) * (activeMode === 'ok' ? 0.09 + confirmPulse * 0.08 : activeMode === 'vortex' ? 0.08 + vortexPulse * 0.12 : 0.025);
+        points.rotation.y = lerp(points.rotation.y, targetRotationY, activeMode === 'spin' ? 0.16 : 0.08);
+        points.rotation.x = lerp(points.rotation.x, targetRotationX, 0.08);
+        points.rotation.z = lerp(points.rotation.z, targetRotationZ, 0.08);
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+
+      function updatePointer(event) {
+        const rect = stage.getBoundingClientRect();
+        pointer.x = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+        pointer.y = clamp((event.clientY - rect.top) / rect.height, 0, 1);
+        pointer.strength = state.pointerDown ? 1 : 0.38;
+      }
+
+      function drawHandOverlay(hands) {
+        const rect = cameraChip.getBoundingClientRect();
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const width = Math.max(1, Math.floor(rect.width * dpr));
+        const height = Math.max(1, Math.floor((rect.width * 0.75) * dpr));
+        if (handOverlay.width !== width || handOverlay.height !== height) {
+          handOverlay.width = width;
+          handOverlay.height = height;
+        }
+        handCtx.clearRect(0, 0, width, height);
+        handCtx.lineWidth = 1.5 * dpr;
+        handCtx.strokeStyle = 'rgba(53, 241, 210, 0.55)';
+        handCtx.fillStyle = 'rgba(245, 182, 77, 0.92)';
+
+        for (const landmarks of hands) {
+          for (const [from, to] of bones) {
+            const a = landmarks[from];
+            const b = landmarks[to];
+            handCtx.beginPath();
+            handCtx.moveTo((1 - a.x) * width, a.y * height);
+            handCtx.lineTo((1 - b.x) * width, b.y * height);
+            handCtx.stroke();
+          }
+          for (const point of landmarks) {
+            handCtx.beginPath();
+            handCtx.arc((1 - point.x) * width, point.y * height, 2.4 * dpr, 0, Math.PI * 2);
+            handCtx.fill();
+          }
+        }
+      }
+
+      function handCenter(landmarks) {
+        let x = 0;
+        let y = 0;
+        for (const point of landmarks) {
+          x += point.x;
+          y += point.y;
+        }
+        return { x: x / landmarks.length, y: y / landmarks.length };
+      }
+
+      function handleHands(results) {
+        const hands = results.multiHandLandmarks || [];
+        const now = performance.now();
+        drawHandOverlay(hands);
+        pointsState.textContent = String(hands.length * 21);
+
+        if (!hands.length) {
+          clearHandGesture();
+          hand.strength = lerp(hand.strength, 0, 0.2);
+          return;
+        }
+
+        const primary = hands[0];
+        const wrist = primary[0];
+        const middleMcp = primary[9];
+        const indexTip = primary[8];
+        const indexPip = primary[6];
+        const indexMcp = primary[5];
+        const thumbTip = primary[4];
+        const thumbIp = primary[3];
+        const thumbMcp = primary[2];
+        const middleTip = primary[12];
+        const middlePip = primary[10];
+        const middleMcp2 = primary[9];
+        const ringTip = primary[16];
+        const ringPip = primary[14];
+        const ringMcp = primary[13];
+        const pinkyTip = primary[20];
+        const pinkyPip = primary[18];
+        const pinkyMcp = primary[17];
+        const palm = Math.max(0.035, distance2(wrist, middleMcp));
+        const pinchRatio = distance2(thumbTip, indexTip) / palm;
+        const reach = [8, 12, 16, 20].reduce((sum, id) => sum + distance2(primary[id], wrist), 0) / (4 * palm);
+        const openScore = clamp((reach - 2.15) / 1.2, 0, 1);
+        const indexReach = distance2(indexTip, wrist) / palm;
+        const thumbReach = distance2(thumbTip, wrist) / palm;
+        const foldedReach = [middleTip, ringTip, pinkyTip].reduce((sum, point) => sum + distance2(point, wrist), 0) / (3 * palm);
+        const fingerMetrics = [
+          { tip: indexTip, pip: indexPip, mcp: indexMcp },
+          { tip: middleTip, pip: middlePip, mcp: middleMcp2 },
+          { tip: ringTip, pip: ringPip, mcp: ringMcp },
+          { tip: pinkyTip, pip: pinkyPip, mcp: pinkyMcp }
+        ].map(({ tip, pip, mcp }) => {
+          const tipReach = distance2(tip, wrist) / palm;
+          const pipReach = distance2(pip, wrist) / palm;
+          const mcpReach = distance2(mcp, wrist) / palm;
+          return {
+            tipReach,
+            pipReach,
+            mcpReach,
+            span: distance2(tip, pip) / palm,
+            extended: tipReach > pipReach + 0.24 && tipReach > mcpReach + 0.62,
+            folded: tipReach < pipReach + 0.08 || tipReach < mcpReach + 0.45
+          };
+        });
+        const [indexFinger, middleFinger, ringFinger, pinkyFinger] = fingerMetrics;
+        const foldedCount = [middleFinger, ringFinger, pinkyFinger].reduce((sum, finger) => sum + (finger.folded ? 1 : 0), 0);
+        const extendedCount = [middleFinger, ringFinger, pinkyFinger].reduce((sum, finger) => sum + (finger.extended ? 1 : 0), 0);
+        const screenExtendedCount = [
+          [middleTip, middlePip, middleMcp2],
+          [ringTip, ringPip, ringMcp],
+          [pinkyTip, pinkyPip, pinkyMcp]
+        ].reduce((sum, [tip, pip, mcp]) => {
+          const upward = tip.y < pip.y - palm * 0.03 && tip.y < mcp.y - palm * 0.12;
+          const longEnough = distance2(tip, mcp) / palm > 0.92;
+          return sum + (upward && longEnough ? 1 : 0);
+        }, 0);
+        const spreadTips = (
+          distance2(middleTip, ringTip) +
+          distance2(ringTip, pinkyTip) +
+          distance2(middleTip, pinkyTip)
+        ) / palm;
+        const screenFingerExtended = (tip, pip, mcp, minLength = 0.82) => {
+          const upward = tip.y < pip.y - palm * 0.025 && tip.y < mcp.y - palm * 0.11;
+          const longEnough = distance2(tip, mcp) / palm > minLength;
+          return upward && longEnough;
+        };
+        const screenIndexExtended = screenFingerExtended(indexTip, indexPip, indexMcp, 0.82);
+        const screenMiddleExtended = screenFingerExtended(middleTip, middlePip, middleMcp2, 0.82);
+        const screenRingFolded = ringFinger.folded || ringTip.y > ringPip.y - palm * 0.015 || distance2(ringTip, ringMcp) / palm < 0.82;
+        const screenPinkyFolded = pinkyFinger.folded || pinkyTip.y > pinkyPip.y - palm * 0.015 || distance2(pinkyTip, pinkyMcp) / palm < 0.78;
+        const allFoldedCount = fingerMetrics.reduce((sum, finger) => sum + (finger.folded ? 1 : 0), 0);
+        const twoFingerStructure = hands.length === 1
+          && screenIndexExtended
+          && screenMiddleExtended
+          && screenRingFolded
+          && screenPinkyFolded
+          && distance2(indexTip, middleTip) / palm > 0.18
+          && openScore > 0.34;
+        const fistStructure = hands.length === 1
+          && allFoldedCount >= 3
+          && openScore < 0.52
+          && indexReach < 1.42
+          && foldedReach < 1.38;
+
+        let twoHandRaw = false;
+        if (hands.length > 1) {
+          const first = handCenter(hands[0]);
+          const second = handCenter(hands[1]);
+          const twoHandDistance = distance2(first, second);
+          hand.twoHands = true;
+          hand.twoHandDistance = lerp(hand.twoHandDistance, twoHandDistance, 0.3);
+          twoHandRaw = twoHandDistance > 0.42;
+        } else {
+          hand.twoHands = false;
+          hand.twoHandDistance = lerp(hand.twoHandDistance, 0, 0.2);
+        }
+
+        const pinchClose = 1 - smoothstep(0.24, 0.42, pinchRatio);
+        const thumbReady = smoothstep(1.0, 1.24, thumbReach);
+        const indexDominance = smoothstep(-0.02, 0.26, indexReach - foldedReach);
+        const closePinch = pinchRatio < 0.34;
+        const heartCandidate = closePinch && foldedCount >= 2 && openScore < 0.74;
+        const okFingerSpread = screenExtendedCount >= 2 && spreadTips > 0.72;
+        const okCandidate = closePinch && okFingerSpread && openScore > 0.34;
+        const heartStructure = hands.length === 1
+          && heartCandidate
+          && indexFinger.span > 0.34
+          && indexDominance > 0.36
+          && foldedCount >= 2
+          && extendedCount <= 1
+          && screenExtendedCount <= 1
+          && openScore < 0.74;
+        const fingerHeartScore = hands.length === 1
+          ? (heartStructure ? 1 : 0) * pinchClose * Math.max(thumbReady, 0.72)
+          : 0;
+
+        hand.heartConfidence = lerp(
+          hand.heartConfidence,
+          fingerHeartScore,
+          fingerHeartScore > hand.heartConfidence ? 0.32 : 0.34
+        );
+        const heartScore = hand.heartConfidence > (hand.gestureMode === 'heart' ? 0.44 : 0.64);
+        const okStructure = hands.length === 1
+          && okCandidate
+          && screenExtendedCount >= 2
+          && spreadTips > 0.72
+          && openScore > 0.34
+          && !heartScore;
+        const openFingerScore = Math.max(
+          smoothstep(1.45, 2.55, extendedCount),
+          smoothstep(1.45, 2.45, screenExtendedCount)
+        );
+        const okRawScore = hands.length === 1
+          ? (okStructure ? 1 : 0) * pinchClose * Math.max(openFingerScore, 0.78)
+          : 0;
+        hand.okConfidence = lerp(
+          hand.okConfidence,
+          okRawScore,
+          okRawScore > hand.okConfidence ? 0.3 : 0.32
+        );
+        const okScore = hand.okConfidence > (hand.gestureMode === 'ok' ? 0.42 : 0.62);
+        const thumbUpAmount = (wrist.y - thumbTip.y) / palm;
+        const thumbAboveFingers = thumbTip.y < Math.min(indexTip.y, middleTip.y, ringTip.y, pinkyTip.y) - palm * 0.08;
+        const thumbLineUp = thumbTip.y < thumbIp.y && thumbIp.y < thumbMcp.y + palm * 0.1;
+        const thumbUpScore = smoothstep(0.58, 0.9, thumbUpAmount);
+        const thumbExtended = smoothstep(1.12, 1.5, thumbReach);
+        const compactScore = 1 - smoothstep(0.5, 0.72, openScore);
+        const likeStructure = hands.length === 1
+          && thumbAboveFingers
+          && thumbLineUp
+          && indexFinger.folded
+          && middleFinger.folded
+          && ringFinger.folded
+          && pinkyFinger.folded
+          && foldedCount >= 3
+          && !heartScore
+          && !okScore;
+        const likeRawScore = hands.length === 1
+          ? (likeStructure ? 1 : 0) * thumbUpScore * thumbExtended * compactScore
+          : 0;
+        hand.likeConfidence = lerp(
+          hand.likeConfidence,
+          likeRawScore,
+          likeRawScore > hand.likeConfidence ? 0.3 : 0.34
+        );
+        const likeScore = hand.likeConfidence > (hand.gestureMode === 'like' ? 0.58 : 0.78);
+        const gesturePoint = heartScore
+          ? { x: (indexTip.x + thumbTip.x) * 0.5, y: (indexTip.y + thumbTip.y) * 0.5 }
+          : indexTip;
+        const nextX = clamp(1 - gesturePoint.x, 0.04, 0.96);
+        const nextY = clamp(gesturePoint.y, 0.04, 0.96);
+        const palmAngle = Math.atan2(indexTip.y - wrist.y, indexTip.x - wrist.x);
+
+        if (hand.hasMotionSample) {
+          const dx = nextX - hand.lastGestureX;
+          const dy = nextY - hand.lastGestureY;
+          let angleDelta = palmAngle - hand.lastPalmAngle;
+          while (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
+          while (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
+          hand.motionX = lerp(hand.motionX, dx, 0.36);
+          hand.motionY = lerp(hand.motionY, dy, 0.36);
+          hand.speed = lerp(hand.speed, Math.hypot(hand.motionX, hand.motionY), 0.42);
+          hand.spin = lerp(hand.spin, Math.abs(angleDelta), 0.24);
+        } else {
+          hand.hasMotionSample = true;
+          hand.motionX = 0;
+          hand.motionY = 0;
+          hand.speed = 0;
+          hand.spin = 0;
+        }
+        hand.lastGestureX = nextX;
+        hand.lastGestureY = nextY;
+        hand.lastPalmAngle = palmAngle;
+
+        const protectedShapeIntent = heartCandidate
+          || okCandidate
+          || okFingerSpread
+          || hand.heartConfidence > 0.18
+          || hand.okConfidence > 0.18
+          || hand.likeConfidence > 0.18;
+        const horizontalSweep = Math.abs(hand.motionX) > 0.005 && Math.abs(hand.motionX) > Math.abs(hand.motionY) * 1.2;
+        const spinDrive = twoFingerStructure && horizontalSweep
+          ? clamp(hand.motionX * 140, -4.2, 4.2)
+          : 0;
+        hand.spinVelocity = lerp(hand.spinVelocity, spinDrive, spinDrive ? 0.34 : 0.12);
+        const spinRaw = twoFingerStructure
+          && !protectedShapeIntent
+          && !heartScore
+          && !okScore
+          && !likeScore;
+        const fistRaw = fistStructure
+          && !protectedShapeIntent
+          && !heartScore
+          && !okScore
+          && !likeScore;
+        const pinchRaw = pinchRatio < 0.42 && !heartScore && !okScore && !likeScore && !heartCandidate && !okCandidate && !spinRaw;
+        const openPalmRaw = hands.length === 1 && openScore > 0.72 && foldedCount === 0 && extendedCount >= 2 && !protectedShapeIntent && !pinchRaw && !fistRaw && !spinRaw && !heartScore && !okScore && !likeScore;
+        const verticalMotion = Math.abs(hand.motionY) > 0.012 && Math.abs(hand.motionY) > Math.abs(hand.motionX) * 1.25 && hand.spin < 0.04;
+        const liftRaw = openPalmRaw && verticalMotion && hand.motionY < 0;
+        const pressRaw = openPalmRaw && verticalMotion && hand.motionY > 0;
+        const movingPalm = (Math.abs(hand.motionX) > 0.014 || hand.spin > 0.06) && !verticalMotion;
+        const vortexRaw = openPalmRaw && movingPalm;
+        const waveRaw = openPalmRaw && !vortexRaw && !liftRaw && !pressRaw;
+
+        let candidateMode = 'nebula';
+        if (twoHandRaw) candidateMode = 'type';
+        else if (heartScore) candidateMode = 'heart';
+        else if (okScore) candidateMode = 'ok';
+        else if (likeScore) candidateMode = 'like';
+        else if (spinRaw) candidateMode = 'spin';
+        else if (fistRaw || pinchRaw) candidateMode = 'gather';
+        else if (liftRaw) candidateMode = 'lift';
+        else if (pressRaw) candidateMode = 'press';
+        else if (vortexRaw) candidateMode = 'vortex';
+        else if (waveRaw) candidateMode = 'wave';
+
+        const stableMode = updateHandGesture(candidateMode, now);
+
+        hand.x = lerp(hand.x, nextX, 0.42);
+        hand.y = lerp(hand.y, nextY, 0.42);
+        hand.open = lerp(hand.open, openScore, 0.28);
+        hand.heart = stableMode === 'heart';
+        hand.ok = stableMode === 'ok';
+        hand.like = stableMode === 'like';
+        hand.lift = stableMode === 'lift';
+        hand.press = stableMode === 'press';
+        hand.fist = stableMode === 'gather' && fistRaw;
+        hand.twoFinger = stableMode === 'spin';
+        hand.pinching = stableMode === 'gather' && (pinchRaw || fistRaw);
+        hand.vortex = stableMode === 'vortex';
+        const strengthTarget = stableMode === 'heart' || stableMode === 'gather' || stableMode === 'spin' || stableMode === 'ok' || stableMode === 'like'
+          ? 1
+          : stableMode === 'vortex'
+            ? 0.9
+            : stableMode === 'wave' || stableMode === 'lift' || stableMode === 'press'
+              ? 0.78
+              : 0.4 + openScore * 0.34;
+        hand.strength = lerp(hand.strength, strengthTarget, 0.3);
+        hand.active = true;
+        state.lastHandAt = now;
+      }
+
+      async function ensureHandModel() {
+        if (state.handModel) return state.handModel;
+        if (!window.Hands) {
+          throw new Error('MediaPipe Hands 未加载');
+        }
+        const model = new window.Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+        });
+        model.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.66,
+          minTrackingConfidence: 0.62
+        });
+        model.onResults(handleHands);
+        state.handModel = model;
+        return model;
+      }
+
+      async function handLoop() {
+        if (!state.cameraActive || !state.handModel) return;
+        if (!state.handBusy && video.readyState >= 2) {
+          state.handBusy = true;
+          try {
+            await state.handModel.send({ image: video });
+          } catch (error) {
+            inputState.textContent = '识别中断';
+          } finally {
+            state.handBusy = false;
+          }
+        }
+        requestAnimationFrame(handLoop);
+      }
+
+      async function enableHands() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          inputState.textContent = '无摄像头能力';
+          return;
+        }
+        if (state.cameraActive) return;
+        enableHand.disabled = true;
+        inputState.textContent = '加载模型';
+        systemState.textContent = 'Loading hand model';
+        try {
+          await ensureHandModel();
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user'
+            },
+            audio: false
+          });
+          video.srcObject = stream;
+          await video.play();
+          state.cameraActive = true;
+          cameraChip.classList.add('is-visible');
+          inputState.textContent = '手势识别';
+          systemState.textContent = 'Hand tracking';
+          enableHand.title = '手势已启用';
+          enableHand.setAttribute('aria-label', '手势已启用');
+          enableHand.innerHTML = `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>手势已启用</span>
+          `;
+          requestAnimationFrame(handLoop);
+        } catch (error) {
+          const errorName = error?.name || '';
+          if (errorName === 'NotAllowedError') inputState.textContent = '摄像头未授权';
+          else if (errorName === 'NotFoundError') inputState.textContent = '未找到摄像头';
+          else inputState.textContent = `手势启动失败${errorName ? `: ${errorName}` : ''}`;
+          systemState.textContent = 'Hand unavailable';
+          enableHand.disabled = false;
+          enableHand.title = '重试手势';
+          enableHand.setAttribute('aria-label', '重试手势');
+          enableHand.innerHTML = `
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 11V5.6a1.6 1.6 0 0 1 3.2 0V10m0-1.5V4.6a1.6 1.6 0 0 1 3.2 0V10m0-1.1V6a1.6 1.6 0 0 1 3.2 0v7.1c0 4.4-2.7 7.4-6.8 7.4-2.2 0-3.9-.9-5-2.4L3.3 15a1.7 1.7 0 0 1 2.4-2.4L8 14.8V11Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>重试手势</span>
+          `;
+        }
+      }
+
+      if (window.desktopShell?.onStartHands) {
+        window.desktopShell.onStartHands(() => {
+          void enableHands();
+        });
+      }
+
+      stage.addEventListener('pointerenter', () => {
+        state.pointerInside = true;
+      });
+      stage.addEventListener('pointerleave', () => {
+        state.pointerInside = false;
+        state.pointerDown = false;
+        pointer.strength = 0.18;
+      });
+      stage.addEventListener('pointermove', updatePointer);
+      stage.addEventListener('pointerdown', (event) => {
+        state.pointerDown = true;
+        updatePointer(event);
+        stage.setPointerCapture(event.pointerId);
+      });
+      stage.addEventListener('pointerup', (event) => {
+        state.pointerDown = false;
+        updatePointer(event);
+      });
+
+      enableHand.addEventListener('click', enableHands);
+      resetField.addEventListener('click', resetParticles);
+      for (const button of modeButtons) {
+        button.addEventListener('click', () => {
+          state.manualMode = button.dataset.mode || 'auto';
+          updateModeButtons();
+        });
+      }
+
+      const resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(stage);
+      window.addEventListener('resize', () => requestAnimationFrame(syncModeIndicator));
+      resize();
+      resetParticles({ keepMode: true });
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>

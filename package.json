@@ -1,0 +1,18 @@
+{
+  "name": "gesture-voice-realtime-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local web demo for Gesture Field with DashScope realtime voice.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "electron electron-main.js",
+    "create:voice": "node create-sci-fi-voice.js"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7"
+  }
+}
