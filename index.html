@@ -1787,6 +1787,25 @@
         };
       }
 
+      function sphereShellPoint(index, total, radius) {
+        const point = spherePoint(index, total, radius);
+        const shell = [0.82, 0.96, 1.12, 1.28][index % 4];
+        if (index % 10 === 0) {
+          const angle = index * 0.097;
+          const ringRadius = radius * (1.18 + ((index % 40) / 40) * 0.18);
+          return {
+            x: Math.cos(angle) * ringRadius,
+            y: Math.sin(angle * 0.42 + index * 0.013) * radius * 0.16,
+            z: Math.sin(angle) * ringRadius * 0.58
+          };
+        }
+        return {
+          x: point.x * shell,
+          y: point.y * shell * 0.94,
+          z: point.z * shell * 1.08
+        };
+      }
+
 	      function buildTextTargets() {
         const offscreen = document.createElement('canvas');
         const scale = 3;
@@ -1979,7 +1998,7 @@
           };
           const vortexAngle = (i / particleCount) * Math.PI * 22;
           const vortexRadius = radius * (0.15 + 0.84 * ((i % 377) / 377));
-          particle.sphere = spherePoint(i, particleCount, radius * 0.94);
+          particle.sphere = sphereShellPoint(i, particleCount, radius * 1.08);
           particle.vortex = {
             angle: vortexAngle,
             radius: vortexRadius,
@@ -2717,7 +2736,14 @@
       }
 
       function targetForParticle(particle, index, time, activeMode) {
-        if (activeMode === 'gather') return particle.sphere;
+        if (activeMode === 'gather') {
+          const breath = 1 + Math.sin(time * 0.0007 + particle.phase) * 0.018;
+          return {
+            x: particle.sphere.x * breath,
+            y: particle.sphere.y * (1 + Math.cos(time * 0.00062 + particle.phase) * 0.012),
+            z: particle.sphere.z * breath
+          };
+        }
         if (activeMode === 'vortex') {
           const input = activeInput();
           const center = hand.active ? worldFromInput(input) : { x: 0, y: 0 };
@@ -2893,7 +2919,7 @@
         const shapeLocked = activeMode === 'type' || activeMode === 'heart' || activeMode === 'like' || sphereLocked;
         if (sphereLocked) {
           hand.sphereSpinAngle += hand.sphereSpinVelocity * delta * 0.0016;
-          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.018);
+          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.006);
         } else {
           hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.04);
         }
@@ -2909,7 +2935,7 @@
           : activeMode === 'like'
             ? (isDesktopShell ? 0.05 : 0.044) + symbolPulse * 0.008
             : sphereLocked
-              ? (isDesktopShell ? 0.047 : 0.041) + spherePulse * 0.006
+              ? (isDesktopShell ? 0.038 : 0.033) + spherePulse * 0.004
               : (isDesktopShell ? 0.048 : 0.042);
         material.size = lerp(material.size, shapeLocked ? shapePointSize : basePointSize + vortexPulse * 0.008 + confirmPulse * 0.006, 0.08);
         const targetRotationY = activeMode === 'gather'
@@ -3173,14 +3199,12 @@
         hand.fist = stableMode === 'gather' && fistRaw;
         hand.pinching = stableMode === 'gather' && (pinchRaw || fistRaw);
         hand.vortex = stableMode === 'vortex';
-        const sphereSpinDrive = stableMode === 'gather'
-          ? clamp(hand.motionX * 120, -4.8, 4.8)
-          : 0;
-        hand.sphereSpinVelocity = lerp(
-          hand.sphereSpinVelocity,
-          sphereSpinDrive,
-          Math.abs(sphereSpinDrive) > 0.04 ? 0.34 : 0.08
-        );
+        if (stableMode === 'gather' && Math.abs(hand.motionX) > 0.006) {
+          const sphereSpinDrive = clamp(hand.motionX * 136, -5.6, 5.6);
+          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, sphereSpinDrive, 0.42);
+        } else if (stableMode !== 'gather') {
+          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.08);
+        }
         const strengthTarget = stableMode === 'heart' || stableMode === 'gather' || stableMode === 'like' || stableMode === 'type'
           ? 1
           : stableMode === 'vortex'
