@@ -1644,7 +1644,9 @@
         motionY: 0,
         speed: 0,
         lastPalmAngle: 0,
-        spin: 0
+        spin: 0,
+        sphereSpinAngle: 0,
+        sphereSpinVelocity: 0
       };
 
       const bones = [
@@ -2669,6 +2671,7 @@
         hand.motionY = 0;
         hand.speed = 0;
         hand.spin = 0;
+        hand.sphereSpinVelocity = 0;
       }
 
       function gestureDwell(mode) {
@@ -2888,6 +2891,12 @@
         updateLabels(activeMode);
         const sphereLocked = activeMode === 'gather';
         const shapeLocked = activeMode === 'type' || activeMode === 'heart' || activeMode === 'like' || sphereLocked;
+        if (sphereLocked) {
+          hand.sphereSpinAngle += hand.sphereSpinVelocity * delta * 0.0016;
+          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.018);
+        } else {
+          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.04);
+        }
         const basePointSize = isDesktopShell ? 0.044 : 0.038;
         const transitionPulse = Math.max(0, 1 - (time - state.modeChangedAt) / 720);
         const heartPulse = activeMode === 'heart' ? transitionPulse : 0;
@@ -2904,7 +2913,7 @@
               : (isDesktopShell ? 0.048 : 0.042);
         material.size = lerp(material.size, shapeLocked ? shapePointSize : basePointSize + vortexPulse * 0.008 + confirmPulse * 0.006, 0.08);
         const targetRotationY = activeMode === 'gather'
-            ? Math.sin(time * 0.00012) * 0.045
+            ? hand.sphereSpinAngle + Math.sin(time * 0.00012) * 0.045
             : shapeLocked
               ? Math.sin(time * 0.00016) * (activeMode === 'heart' ? 0.05 + heartPulse * 0.08 : 0.026)
               : Math.sin(time * 0.00018) * (activeMode === 'vortex' ? 0.16 + vortexPulse * 0.12 : 0.1);
@@ -3164,6 +3173,14 @@
         hand.fist = stableMode === 'gather' && fistRaw;
         hand.pinching = stableMode === 'gather' && (pinchRaw || fistRaw);
         hand.vortex = stableMode === 'vortex';
+        const sphereSpinDrive = stableMode === 'gather'
+          ? clamp(hand.motionX * 120, -4.8, 4.8)
+          : 0;
+        hand.sphereSpinVelocity = lerp(
+          hand.sphereSpinVelocity,
+          sphereSpinDrive,
+          Math.abs(sphereSpinDrive) > 0.04 ? 0.34 : 0.08
+        );
         const strengthTarget = stableMode === 'heart' || stableMode === 'gather' || stableMode === 'like' || stableMode === 'type'
           ? 1
           : stableMode === 'vortex'
