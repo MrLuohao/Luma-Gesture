@@ -1481,6 +1481,17 @@
         return t * t * (3 - 2 * t);
       };
       const random = (min, max) => min + Math.random() * (max - min);
+      const seeded = (value) => {
+        const x = Math.sin(value) * 43758.5453123;
+        return x - Math.floor(x);
+      };
+      const TAU = Math.PI * 2;
+      const wrapAngle = (angle) => {
+        let wrapped = (angle + Math.PI) % TAU;
+        if (wrapped < 0) wrapped += TAU;
+        return wrapped - Math.PI;
+      };
+      const lerpAngle = (a, b, t) => a + wrapAngle(b - a) * t;
       const distance2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
       const isDesktopShell = document.documentElement.classList.contains('is-desktop-shell');
       const modeLabels = {
@@ -1646,7 +1657,8 @@
         lastPalmAngle: 0,
         spin: 0,
         sphereSpinAngle: 0,
-        sphereSpinVelocity: 0
+        sphereSpinVelocity: 0,
+        sphereSpinDrive: 0
       };
 
       const bones = [
@@ -1687,6 +1699,25 @@
       renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
       stage.appendChild(renderer.domElement);
 
+      function createSoftParticleTexture() {
+        const canvas = document.createElement('canvas');
+        const size = 96;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const center = size / 2;
+        const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+        gradient.addColorStop(0, 'rgba(255,255,255,1)');
+        gradient.addColorStop(0.22, 'rgba(255,255,255,0.82)');
+        gradient.addColorStop(0.56, 'rgba(255,255,255,0.22)');
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        return texture;
+      }
+
       const particleCount = 4200;
       const positions = new Float32Array(particleCount * 3);
       const colors = new Float32Array(particleCount * 3);
@@ -1694,6 +1725,7 @@
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const typePhrase = '我爱你';
+      const softParticleTexture = createSoftParticleTexture();
 
 	      const material = new THREE.PointsMaterial({
 	        size: isDesktopShell ? 0.044 : 0.038,
@@ -1701,11 +1733,157 @@
 	        vertexColors: true,
 	        transparent: true,
 	        opacity: isDesktopShell ? 0.96 : 0.88,
-	        blending: isDesktopShell ? THREE.NormalBlending : THREE.AdditiveBlending,
+	        map: softParticleTexture,
+	        alphaTest: 0.015,
+	        blending: THREE.AdditiveBlending,
 	        depthWrite: false
 	      });
       const points = new THREE.Points(geometry, material);
       scene.add(points);
+
+      function createGatherParticleSystem() {
+        const count = isDesktopShell ? 14000 : 9000;
+        const gatherGeometry = new THREE.BufferGeometry();
+        const gatherPositions = new Float32Array(count * 3);
+        const gatherSeeds = new Float32Array(count * 4);
+        const gatherKinds = new Float32Array(count);
+
+        for (let i = 0; i < count; i += 1) {
+          const ribbon = i % 6 === 0;
+          const p = spherePoint(i, count, 1);
+          const r = ribbon ? 0 : 0.16 + Math.pow(seeded(i * 19.31 + 2.7), 0.38) * 0.84;
+          const offset = i * 3;
+          gatherPositions[offset] = p.x * r + (seeded(i * 11.13) - 0.5) * 0.06;
+          gatherPositions[offset + 1] = p.y * r * 0.92 + (seeded(i * 15.77) - 0.5) * 0.05;
+          gatherPositions[offset + 2] = p.z * r * 1.02 + (seeded(i * 21.93) - 0.5) * 0.07;
+          const seedOffset = i * 4;
+          gatherSeeds[seedOffset] = seeded(i * 8.17 + 0.13);
+          gatherSeeds[seedOffset + 1] = seeded(i * 5.91 + 4.4);
+          gatherSeeds[seedOffset + 2] = seeded(i * 17.43 + 1.2);
+          gatherSeeds[seedOffset + 3] = seeded(i * 29.17 + 7.8);
+          gatherKinds[i] = ribbon ? 1 : 0;
+        }
+
+        gatherGeometry.setAttribute('position', new THREE.BufferAttribute(gatherPositions, 3));
+        gatherGeometry.setAttribute('aSeed', new THREE.BufferAttribute(gatherSeeds, 4));
+        gatherGeometry.setAttribute('aKind', new THREE.BufferAttribute(gatherKinds, 1));
+
+        const gatherMaterial = new THREE.ShaderMaterial({
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          uniforms: {
+            uTime: { value: 0 },
+            uSpin: { value: 0 },
+            uScale: { value: 1 },
+            uMistDensity: { value: 1.22 },
+            uRibbonOpacity: { value: 0.7 },
+            uPixelRatio: { value: Math.min(2, window.devicePixelRatio || 1) }
+          },
+          vertexShader: `
+            attribute vec4 aSeed;
+            attribute float aKind;
+            uniform float uTime;
+            uniform float uSpin;
+            uniform float uScale;
+            uniform float uMistDensity;
+            uniform float uRibbonOpacity;
+            uniform float uPixelRatio;
+            varying vec3 vColor;
+            varying float vAlpha;
+
+            mat3 rotateY(float a) {
+              float s = sin(a);
+              float c = cos(a);
+              return mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c);
+            }
+
+            mat3 rotateX(float a) {
+              float s = sin(a);
+              float c = cos(a);
+              return mat3(1.0, 0.0, 0.0, 0.0, c, -s, 0.0, s, c);
+            }
+
+            float sphereEdge(vec3 p) {
+              return smoothstep(0.54, 0.98, length(p));
+            }
+
+            vec3 curlFlow(vec3 p, float seed) {
+              float n1 = sin(p.y * 3.2 + seed * 6.283 + uTime * 0.22) + cos(p.z * 2.7 - seed * 3.7 + uTime * 0.17);
+              float n2 = sin(p.z * 3.0 + seed * 5.1 - uTime * 0.2) + cos(p.x * 2.6 + seed * 2.9 + uTime * 0.19);
+              float n3 = sin(p.x * 2.8 - seed * 4.4 + uTime * 0.18) + cos(p.y * 3.1 + seed * 3.3 - uTime * 0.16);
+              vec3 curl = vec3(n2 - n3, n3 - n1, n1 - n2);
+              return normalize(curl + 0.0001);
+            }
+
+            vec3 ribbonPoint(float local, float band, vec2 spread) {
+              float segment = smoothstep(0.02, 0.18, local) * (1.0 - smoothstep(0.72, 1.0, local));
+              float arc = local * (0.64 + aSeed.y * 0.16) + aSeed.x * 0.42 + band * 0.16 + uTime * 0.028 + uSpin * 0.02;
+              float angle = arc * 6.2831853 + band * 1.35 + sin(uTime * 0.12 + band) * 0.22;
+              float wave = sin(local * 3.1415926);
+              float radius = 0.22 + pow(max(wave, 0.0), 0.72) * (0.34 + segment * 0.18);
+              vec3 p = vec3(
+                cos(angle) * radius,
+                sin(local * 5.2 + band * 1.1 + uTime * 0.22) * (0.2 + segment * 0.12),
+                sin(angle) * radius * (0.58 + segment * 0.16)
+              );
+              p += vec3(spread.x * 0.13, spread.y * 0.08, (spread.x - spread.y) * 0.1) * segment;
+              return p;
+            }
+
+            void main() {
+              vec3 p = position;
+              float edge = sphereEdge(p);
+              float mistAlpha = (0.11 + edge * 0.32 + aSeed.z * 0.07) * uMistDensity;
+              vec3 mistFlow = curlFlow(p * 2.2 + vec3(uTime * 0.08, -uTime * 0.05, uTime * 0.06), aSeed.x) * (0.03 + edge * 0.045);
+              p += mistFlow;
+
+              float ribbonAlpha = 0.0;
+              if (aKind > 0.5) {
+                float local = fract(aSeed.x + uTime * 0.018 + uSpin * 0.012);
+                float band = floor(aSeed.y * 4.0);
+                float segment = smoothstep(0.02, 0.18, local) * (1.0 - smoothstep(0.72, 1.0, local));
+                p = ribbonPoint(local, band, aSeed.zw - 0.5);
+                ribbonAlpha = segment * 0.42;
+              }
+              float ribbonGlow = ribbonAlpha * uRibbonOpacity;
+
+              p = rotateY(uSpin + sin(uTime * 0.08) * 0.08) * rotateX(sin(uTime * 0.07) * 0.08) * p;
+              p *= uScale;
+              vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+              gl_Position = projectionMatrix * mvPosition;
+
+              if (aKind > 0.5) {
+                vAlpha = ribbonGlow;
+                vColor = mix(vec3(0.76, 0.92, 1.0), vec3(1.0), 0.68 + aSeed.w * 0.22);
+                gl_PointSize = (2.4 + ribbonGlow * 7.2) * uPixelRatio;
+              } else {
+                vAlpha = mistAlpha;
+                vColor = mix(vec3(0.16, 0.58, 0.72), vec3(0.78, 0.96, 1.0), edge * 0.62 + aSeed.w * 0.18);
+                gl_PointSize = (1.65 + edge * 2.45 + aSeed.w * 0.75) * uPixelRatio;
+              }
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vColor;
+            varying float vAlpha;
+            void main() {
+              vec2 uv = gl_PointCoord - vec2(0.5);
+              float d = length(uv);
+              float soft = smoothstep(0.5, 0.0, d);
+              float core = smoothstep(0.16, 0.0, d) * 0.28;
+              gl_FragColor = vec4(vColor, (soft * 0.52 + core * 0.12) * vAlpha);
+            }
+          `
+        });
+
+        const gatherPoints = new THREE.Points(gatherGeometry, gatherMaterial);
+        gatherPoints.visible = false;
+        scene.add(gatherPoints);
+        return { points: gatherPoints, material: gatherMaterial };
+      }
+
+      const gatherSystem = createGatherParticleSystem();
 
 	      const particles = [];
       let textTargets = [];
@@ -1713,6 +1891,18 @@
       let likeTargets = [];
 
 	      function colorForParticle(particle, i, activeMode) {
+        if (activeMode === 'gather') {
+          const pulse = (Math.sin(performance.now() * 0.0034 + particle.phase) + 1) / 2;
+          const depth = clamp((particle.z + 2.6) / 5.2, 0, 1);
+          const ribbon = particle.sphereKind === 'ribbon';
+          const edgeGlow = particle.sphereEdge || 0;
+          const glow = ribbon ? clamp(0.54 + pulse * 0.28 + depth * 0.18, 0, 0.9) : clamp(0.16 + edgeGlow * 0.58 + pulse * 0.18 + depth * 0.14, 0, 0.88);
+          colors[i] = ribbon ? lerp(0.72, 1, glow) : lerp(0.18, 0.72, glow);
+          colors[i + 1] = ribbon ? lerp(0.86, 1, glow) : lerp(0.68, 1, glow);
+          colors[i + 2] = ribbon ? 1 : lerp(0.86, 1, glow);
+          return;
+        }
+
         if (isDesktopShell) {
           const pulse = (Math.sin(performance.now() * 0.0038 + particle.phase) + 1) / 2;
           const depth = clamp((particle.z + 3.2) / 6.4, 0, 1);
@@ -1789,10 +1979,10 @@
 
       function sphereShellPoint(index, total, radius) {
         const point = spherePoint(index, total, radius);
-        const shell = [0.82, 0.96, 1.12, 1.28][index % 4];
+        const shell = [0.76, 0.9, 1.03, 1.14][index % 4];
         if (index % 10 === 0) {
           const angle = index * 0.097;
-          const ringRadius = radius * (1.18 + ((index % 40) / 40) * 0.18);
+          const ringRadius = radius * (1.02 + ((index % 40) / 40) * 0.12);
           return {
             x: Math.cos(angle) * ringRadius,
             y: Math.sin(angle * 0.42 + index * 0.013) * radius * 0.16,
@@ -1803,6 +1993,39 @@
           x: point.x * shell,
           y: point.y * shell * 0.94,
           z: point.z * shell * 1.08
+        };
+      }
+
+      function sphereMistPoint(index, total, radius) {
+        const point = spherePoint(index, total, 1);
+        const edgeBias = Math.pow(seeded(index * 23.173 + 7.91), 0.34);
+        const radial = 0.26 + edgeBias * 0.74;
+        const warpA = seeded(index * 41.71 + 3.2) - 0.5;
+        const warpB = seeded(index * 71.37 + 9.4) - 0.5;
+        const softAsymmetry = 1 + Math.sin(index * 0.031) * 0.045;
+        return {
+          x: (point.x * radial + warpA * 0.055) * radius * softAsymmetry,
+          y: (point.y * radial * 0.92 + warpB * 0.048) * radius,
+          z: (point.z * radial * 1.04 + Math.sin(index * 0.047) * 0.035) * radius,
+          edge: smoothstep(0.62, 0.98, radial)
+        };
+      }
+
+      function energyRibbonPoint(particle, time, radius) {
+        const band = particle.ribbonIndex || 0;
+        const arcStart = particle.ribbonArcStart || 0;
+        const arcSpan = particle.ribbonArcSpan || 0.64;
+        const t = (arcStart + particle.ribbonT * arcSpan + time * 0.000026 + hand.sphereSpinAngle * 0.014) % 1;
+        const localArc = (particle.ribbonT % 1);
+        const ribbonMask = smoothstep(0.04, 0.22, localArc) * (1 - smoothstep(0.78, 0.98, localArc));
+        const wave = Math.sin(t * Math.PI);
+        const angle = t * Math.PI * 2 + band * 1.72 + time * 0.0003 + hand.sphereSpinAngle * 0.34;
+        const fold = Math.sin(t * Math.PI * 3.4 + band * 1.35 + time * 0.00046);
+        const ribbonRadius = radius * (0.16 + Math.pow(Math.max(0, wave), 0.72) * (0.42 + ribbonMask * 0.18));
+        return {
+          x: Math.cos(angle) * ribbonRadius + fold * radius * 0.07,
+          y: Math.sin(t * Math.PI * 1.7 + band * 1.08 + time * 0.0004) * radius * (0.22 + ribbonMask * 0.12) + (band - 1.5) * radius * 0.038,
+          z: Math.sin(angle) * ribbonRadius * (0.58 + ribbonMask * 0.18) + Math.cos(t * Math.PI * 2.6 + band) * radius * 0.1
         };
       }
 
@@ -1998,7 +2221,18 @@
           };
           const vortexAngle = (i / particleCount) * Math.PI * 22;
           const vortexRadius = radius * (0.15 + 0.84 * ((i % 377) / 377));
-          particle.sphere = sphereShellPoint(i, particleCount, radius * 1.08);
+          const ribbonParticle = i % 4 === 0;
+          particle.sphereKind = ribbonParticle ? 'ribbon' : 'mist';
+          particle.ribbonIndex = i % 4;
+          particle.ribbonT = seeded(i * 11.73 + 0.29);
+          particle.ribbonArcStart = seeded(i * 5.91 + 2.4);
+          particle.ribbonArcSpan = 0.48 + seeded(i * 3.13 + 8.7) * 0.28;
+          particle.sphereRadius = radius * 0.92;
+          const mist = sphereMistPoint(i, particleCount, particle.sphereRadius);
+          particle.sphereEdge = mist.edge;
+          particle.sphere = ribbonParticle
+            ? energyRibbonPoint(particle, 0, particle.sphereRadius)
+            : mist;
           particle.vortex = {
             angle: vortexAngle,
             radius: vortexRadius,
@@ -2021,6 +2255,8 @@
         buildHeartTargets();
         likeTargets = buildSymbolTargets('👍', 0.5);
         assignTargets();
+        gatherSystem.material.uniforms.uScale.value = Math.min(state.worldWidth, state.worldHeight) * 0.34;
+        gatherSystem.material.uniforms.uPixelRatio.value = Math.min(2, window.devicePixelRatio || 1);
       }
 
       function resetParticles(options = {}) {
@@ -2690,6 +2926,7 @@
         hand.motionY = 0;
         hand.speed = 0;
         hand.spin = 0;
+        hand.sphereSpinDrive = 0;
         hand.sphereSpinVelocity = 0;
       }
 
@@ -2737,11 +2974,14 @@
 
       function targetForParticle(particle, index, time, activeMode) {
         if (activeMode === 'gather') {
+          if (particle.sphereKind === 'ribbon') {
+            return energyRibbonPoint(particle, time, particle.sphereRadius || 1.2);
+          }
           const breath = 1 + Math.sin(time * 0.0007 + particle.phase) * 0.018;
           return {
-            x: particle.sphere.x * breath,
-            y: particle.sphere.y * (1 + Math.cos(time * 0.00062 + particle.phase) * 0.012),
-            z: particle.sphere.z * breath
+            x: particle.sphere.x * breath + Math.sin(time * 0.00036 + particle.phase) * 0.024,
+            y: particle.sphere.y * (1 + Math.cos(time * 0.00062 + particle.phase) * 0.012) + Math.cos(time * 0.0004 + particle.phase * 1.3) * 0.018,
+            z: particle.sphere.z * breath + Math.sin(time * 0.00032 + particle.phase * 0.8) * 0.03
           };
         }
         if (activeMode === 'vortex') {
@@ -2820,10 +3060,11 @@
           const floatX = isShapeMode ? Math.sin(time * 0.001 + particle.phase) * (shapeFloatX + shapeEntrance * 0.034) : Math.sin(time * 0.0011 + particle.phase) * 0.09;
           const floatY = isShapeMode ? Math.cos(time * 0.0012 + particle.phase) * (shapeFloatY + shapeEntrance * 0.028) : Math.cos(time * 0.0014 + particle.phase) * 0.07;
 
-          const shapeStiffness = isHeartMode ? 0.046 : isSymbolMode ? 0.044 : isSphereMode ? 0.048 : 0.04;
-          let ax = (target.x + floatX - particle.x) * (isShapeMode ? shapeStiffness + shapeEntrance * 0.016 : 0.018);
-          let ay = (target.y + floatY - particle.y) * (isShapeMode ? shapeStiffness + shapeEntrance * 0.016 : 0.018);
-          let az = (target.z - particle.z) * (isShapeMode ? (isHeartMode ? 0.036 : isSphereMode ? 0.038 : 0.034) + shapeEntrance * 0.012 : 0.016);
+          const sphereStiffness = particle.sphereKind === 'ribbon' ? 0.052 : 0.031;
+          const shapeStiffness = isHeartMode ? 0.046 : isSymbolMode ? 0.044 : isSphereMode ? sphereStiffness : 0.04;
+          let ax = (target.x + floatX - particle.x) * (isShapeMode ? shapeStiffness + shapeEntrance * 0.014 : 0.018);
+          let ay = (target.y + floatY - particle.y) * (isShapeMode ? shapeStiffness + shapeEntrance * 0.014 : 0.018);
+          let az = (target.z - particle.z) * (isShapeMode ? (isHeartMode ? 0.036 : isSphereMode ? (particle.sphereKind === 'ribbon' ? 0.046 : 0.027) : 0.034) + shapeEntrance * 0.01 : 0.016);
 
           const dx = particle.x - focus.x;
           const dy = particle.y - focus.y;
@@ -2840,9 +3081,10 @@
             az += (dz / distance) * force * (isShapeMode ? 0.16 : 0.42);
           }
 
-          particle.vx = (particle.vx + ax) * (isShapeMode ? (isHeartMode || isSymbolMode || isSphereMode ? 0.82 + shapeEntrance * 0.02 : 0.84) : 0.9);
-          particle.vy = (particle.vy + ay) * (isShapeMode ? (isHeartMode || isSymbolMode || isSphereMode ? 0.82 + shapeEntrance * 0.02 : 0.84) : 0.9);
-          particle.vz = (particle.vz + az) * (isShapeMode ? (isHeartMode || isSymbolMode || isSphereMode ? 0.84 + shapeEntrance * 0.02 : 0.86) : 0.91);
+          const sphereDamping = particle.sphereKind === 'ribbon' ? 0.86 : 0.9;
+          particle.vx = (particle.vx + ax) * (isShapeMode ? (isHeartMode || isSymbolMode ? 0.82 + shapeEntrance * 0.02 : isSphereMode ? sphereDamping : 0.84) : 0.9);
+          particle.vy = (particle.vy + ay) * (isShapeMode ? (isHeartMode || isSymbolMode ? 0.82 + shapeEntrance * 0.02 : isSphereMode ? sphereDamping : 0.84) : 0.9);
+          particle.vz = (particle.vz + az) * (isShapeMode ? (isHeartMode || isSymbolMode ? 0.84 + shapeEntrance * 0.02 : isSphereMode ? sphereDamping + 0.01 : 0.86) : 0.91);
           particle.x += particle.vx;
           particle.y += particle.vy;
           particle.z += particle.vz;
@@ -2917,9 +3159,25 @@
         updateLabels(activeMode);
         const sphereLocked = activeMode === 'gather';
         const shapeLocked = activeMode === 'type' || activeMode === 'heart' || activeMode === 'like' || sphereLocked;
+        gatherSystem.points.visible = sphereLocked;
+        points.visible = !sphereLocked;
         if (sphereLocked) {
-          hand.sphereSpinAngle += hand.sphereSpinVelocity * delta * 0.0016;
+          gatherSystem.material.uniforms.uTime.value = time * 0.001;
+          gatherSystem.material.uniforms.uScale.value = Math.min(state.worldWidth, state.worldHeight) * 0.34;
+        }
+        const targetMap = sphereLocked ? softParticleTexture : null;
+        const targetAlphaTest = sphereLocked ? 0.015 : 0;
+        const targetBlending = sphereLocked ? THREE.AdditiveBlending : (isDesktopShell ? THREE.NormalBlending : THREE.AdditiveBlending);
+        if (material.map !== targetMap || material.alphaTest !== targetAlphaTest || material.blending !== targetBlending) {
+          material.map = targetMap;
+          material.alphaTest = targetAlphaTest;
+          material.blending = targetBlending;
+          material.needsUpdate = true;
+        }
+        if (sphereLocked) {
+          hand.sphereSpinAngle = wrapAngle(hand.sphereSpinAngle + hand.sphereSpinVelocity * delta * 0.0016);
           hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.006);
+          gatherSystem.material.uniforms.uSpin.value = lerpAngle(gatherSystem.material.uniforms.uSpin.value, hand.sphereSpinAngle, 0.18);
         } else {
           hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.04);
         }
@@ -2935,7 +3193,7 @@
           : activeMode === 'like'
             ? (isDesktopShell ? 0.05 : 0.044) + symbolPulse * 0.008
             : sphereLocked
-              ? (isDesktopShell ? 0.038 : 0.033) + spherePulse * 0.004
+              ? (isDesktopShell ? 0.055 : 0.048) + spherePulse * 0.004
               : (isDesktopShell ? 0.048 : 0.042);
         material.size = lerp(material.size, shapeLocked ? shapePointSize : basePointSize + vortexPulse * 0.008 + confirmPulse * 0.006, 0.08);
         const targetRotationY = activeMode === 'gather'
@@ -3179,7 +3437,7 @@
           && !likeScore;
         const pinchRaw = pinchRatio < 0.42 && !heartScore && !likeScore && !heartCandidate;
         const openPalmRaw = hands.length === 1 && openScore > 0.72 && foldedCount === 0 && extendedCount >= 2 && !protectedShapeIntent && !pinchRaw && !fistRaw && !heartScore && !likeScore;
-        const movingPalm = Math.abs(hand.motionX) > 0.014 || hand.spin > 0.06;
+        const movingPalm = hand.spin > 0.08;
         const vortexRaw = openPalmRaw && movingPalm;
 
         let candidateMode = 'gather';
@@ -3199,11 +3457,17 @@
         hand.fist = stableMode === 'gather' && fistRaw;
         hand.pinching = stableMode === 'gather' && (pinchRaw || fistRaw);
         hand.vortex = stableMode === 'vortex';
-        if (stableMode === 'gather' && Math.abs(hand.motionX) > 0.006) {
-          const sphereSpinDrive = clamp(hand.motionX * 136, -5.6, 5.6);
-          hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, sphereSpinDrive, 0.42);
+        if (stableMode === 'gather' && Math.abs(hand.motionX) > 0.003) {
+          let sphereSpinDrive = hand.sphereSpinDrive;
+          sphereSpinDrive = lerp(sphereSpinDrive, clamp(hand.motionX * 136, -5.6, 5.6), 0.28);
+          hand.sphereSpinDrive = sphereSpinDrive;
+          hand.sphereSpinVelocity += sphereSpinDrive * 0.16;
+          hand.sphereSpinVelocity = clamp(hand.sphereSpinVelocity, -6.2, 6.2);
         } else if (stableMode !== 'gather') {
+          hand.sphereSpinDrive = lerp(hand.sphereSpinDrive, 0, 0.18);
           hand.sphereSpinVelocity = lerp(hand.sphereSpinVelocity, 0, 0.08);
+        } else {
+          hand.sphereSpinDrive = lerp(hand.sphereSpinDrive, 0, 0.12);
         }
         const strengthTarget = stableMode === 'heart' || stableMode === 'gather' || stableMode === 'like' || stableMode === 'type'
           ? 1
