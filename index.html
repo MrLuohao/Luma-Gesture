@@ -1434,37 +1434,6 @@
         </aside>
       </div>
 
-      <div class="command-deck" aria-label="粒子效果切换">
-        <div class="deck-head">
-          <span class="micro-label">Particle modes</span>
-          <span>Auto maps hand shape to field behavior</span>
-        </div>
-        <div class="mode-switch" id="modeSwitch">
-          <button class="mode-btn" type="button" data-mode="auto" aria-pressed="true">自动</button>
-          <button class="mode-btn" type="button" data-mode="orbit" aria-pressed="false">轨道</button>
-          <button class="mode-btn" type="button" data-mode="nebula" aria-pressed="false">星云</button>
-          <button class="mode-btn" type="button" data-mode="gather" aria-pressed="false">聚合</button>
-	          <button class="mode-btn" type="button" data-mode="wave" aria-pressed="false">扩散</button>
-	          <button class="mode-btn" type="button" data-mode="vortex" aria-pressed="false">漩涡</button>
-          <button class="mode-btn" type="button" data-mode="heart" aria-pressed="false">爱心</button>
-	          <button class="mode-btn" type="button" data-mode="type" aria-pressed="false">成字</button>
-        </div>
-        <div class="actions control-actions" aria-label="核心控制">
-          <button class="btn btn-primary" id="enableHand" type="button" title="启用手势" aria-label="启用手势">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 11V5.6a1.6 1.6 0 0 1 3.2 0V10m0-1.5V4.6a1.6 1.6 0 0 1 3.2 0V10m0-1.1V6a1.6 1.6 0 0 1 3.2 0v7.1c0 4.4-2.7 7.4-6.8 7.4-2.2 0-3.9-.9-5-2.4L3.3 15a1.7 1.7 0 0 1 2.4-2.4L8 14.8V11Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>启用手势</span>
-          </button>
-          <button class="icon-btn" id="resetField" type="button" title="重置" aria-label="重置">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4.8 9.3A7.8 7.8 0 1 1 6.6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M4.5 4.8v4.7h4.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
       <div class="camera-chip" id="cameraChip" aria-hidden="true">
         <video id="cameraFeed" playsinline muted></video>
         <canvas id="handOverlay"></canvas>
@@ -1479,10 +1448,6 @@
 
     (() => {
       const stage = document.getElementById('stage3d');
-      const enableHand = document.getElementById('enableHand');
-      const resetField = document.getElementById('resetField');
-      const modeSwitch = document.getElementById('modeSwitch');
-      const modeButtons = Array.from(document.querySelectorAll('[data-mode]'));
       const inputState = document.getElementById('inputState');
       const gestureState = document.getElementById('gestureState');
       const modeCaption = document.getElementById('modeCaption');
@@ -1547,15 +1512,11 @@
         press: 'PALM / PRESS',
 	        type: 'TYPE / LOCKED'
       };
-      const urlMode = new URLSearchParams(window.location.search).get('mode');
-      const initialMode = Object.prototype.hasOwnProperty.call(modeLabels, urlMode) ? urlMode : 'auto';
-
       const state = {
         width: 1,
         height: 1,
         worldWidth: 8,
         worldHeight: 5,
-        manualMode: initialMode,
         pointerInside: false,
         pointerDown: false,
         cameraActive: false,
@@ -2170,8 +2131,6 @@
           particle.vy = 0;
           particle.vz = 0;
         }
-        if (!options.keepMode) state.manualMode = 'auto';
-        updateModeButtons();
       }
 
       function activeInput() {
@@ -2883,29 +2842,11 @@
       }
 
       function resolveMode() {
-        if (state.manualMode !== 'auto') return state.manualMode;
         if (hand.active) {
           return hand.gestureMode || 'nebula';
         }
         if (state.pointerDown) return 'gather';
         return state.pointerInside ? 'nebula' : 'orbit';
-      }
-
-      function updateModeButtons() {
-        for (const button of modeButtons) {
-          button.setAttribute('aria-pressed', String(button.dataset.mode === state.manualMode));
-        }
-        requestAnimationFrame(syncModeIndicator);
-        modeState.textContent = modeLabels[state.manualMode] || '自动';
-      }
-
-      function syncModeIndicator() {
-        const activeButton = modeButtons.find((button) => button.dataset.mode === state.manualMode) || modeButtons[0];
-        if (!modeSwitch || !activeButton) return;
-        const switchRect = modeSwitch.getBoundingClientRect();
-        const activeRect = activeButton.getBoundingClientRect();
-        modeSwitch.style.setProperty('--indicator-x', `${activeRect.left - switchRect.left}px`);
-        modeSwitch.style.setProperty('--indicator-w', `${activeRect.width}px`);
       }
 
       function targetForParticle(particle, index, time, activeMode) {
@@ -3076,13 +3017,10 @@
                   : activeMode === 'gather' || activeMode === 'spin' ? '1.8'
                     : '3.0';
         modeCaption.textContent = modeCaptions[activeMode] || 'ORBIT / READY';
-        modeState.textContent = state.manualMode === 'auto' ? modeLabels[activeMode] : modeLabels[state.manualMode];
+        modeState.textContent = modeLabels[activeMode] || '自动';
 
         let label = '待机';
-        if (state.manualMode !== 'auto') {
-          inputState.textContent = hand.active ? '手势识别' : (state.cameraActive ? '等待手势' : '指针备用');
-          label = modeLabels[activeMode] || '待机';
-        } else if (hand.active) {
+        if (hand.active) {
           inputState.textContent = '手势识别';
           if (activeMode === 'heart') label = '比心爱心';
           else if (activeMode === 'ok') label = 'OK 字母';
@@ -3536,7 +3474,6 @@
           return;
         }
         if (state.cameraActive) return;
-        enableHand.disabled = true;
         inputState.textContent = '加载模型';
         systemState.textContent = 'Loading hand model';
         try {
@@ -3555,14 +3492,6 @@
           cameraChip.classList.add('is-visible');
           inputState.textContent = '手势识别';
           systemState.textContent = 'Hand tracking';
-          enableHand.title = '手势已启用';
-          enableHand.setAttribute('aria-label', '手势已启用');
-          enableHand.innerHTML = `
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>手势已启用</span>
-          `;
           requestAnimationFrame(handLoop);
         } catch (error) {
           const errorName = error?.name || '';
@@ -3570,15 +3499,6 @@
           else if (errorName === 'NotFoundError') inputState.textContent = '未找到摄像头';
           else inputState.textContent = `手势启动失败${errorName ? `: ${errorName}` : ''}`;
           systemState.textContent = 'Hand unavailable';
-          enableHand.disabled = false;
-          enableHand.title = '重试手势';
-          enableHand.setAttribute('aria-label', '重试手势');
-          enableHand.innerHTML = `
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 11V5.6a1.6 1.6 0 0 1 3.2 0V10m0-1.5V4.6a1.6 1.6 0 0 1 3.2 0V10m0-1.1V6a1.6 1.6 0 0 1 3.2 0v7.1c0 4.4-2.7 7.4-6.8 7.4-2.2 0-3.9-.9-5-2.4L3.3 15a1.7 1.7 0 0 1 2.4-2.4L8 14.8V11Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span>重试手势</span>
-          `;
         }
       }
 
@@ -3607,18 +3527,8 @@
         updatePointer(event);
       });
 
-      enableHand.addEventListener('click', enableHands);
-      resetField.addEventListener('click', resetParticles);
-      for (const button of modeButtons) {
-        button.addEventListener('click', () => {
-          state.manualMode = button.dataset.mode || 'auto';
-          updateModeButtons();
-        });
-      }
-
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(stage);
-      window.addEventListener('resize', () => requestAnimationFrame(syncModeIndicator));
       resize();
       resetParticles({ keepMode: true });
       requestAnimationFrame(animate);
