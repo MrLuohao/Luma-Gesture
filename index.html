@@ -1393,7 +1393,7 @@
 
           <div class="mode-readout">
             <strong id="gestureState">待机</strong>
-            <span id="modeCaption">ORBIT / READY</span>
+            <span id="modeCaption">SPHERE / LOCKED</span>
           </div>
 
           <div class="status-grid">
@@ -1484,33 +1484,18 @@
       const distance2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
       const isDesktopShell = document.documentElement.classList.contains('is-desktop-shell');
       const modeLabels = {
-        auto: '自动',
-        orbit: '轨道',
-        nebula: '星云',
         gather: '聚合',
-        spin: '旋球',
-        wave: '扩散',
         vortex: '漩涡',
         heart: '爱心',
-        ok: 'OK',
         like: '点赞',
-        lift: '上推',
-        press: '下压',
-	        type: '成字'
+        type: '成字'
       };
       const modeCaptions = {
-        orbit: 'ORBIT / STABLE',
-        nebula: 'NEBULA / DRIFT',
         gather: 'SPHERE / LOCKED',
-        spin: 'SPHERE / SWIPE',
-        wave: 'WAVE / EXPANSION',
         vortex: 'VORTEX / ROTATION',
         heart: 'HEART / LOVE',
-        ok: 'OK / LETTERS',
         like: 'LIKE / SHAPE',
-        lift: 'PALM / LIFT',
-        press: 'PALM / PRESS',
-	        type: 'TYPE / LOCKED'
+        type: 'TYPE / LOCKED'
       };
       const state = {
         width: 1,
@@ -1640,21 +1625,16 @@
         active: false,
         pinching: false,
         fist: false,
-        twoFinger: false,
         heart: false,
         vortex: false,
         heartConfidence: 0,
-        ok: false,
-        okConfidence: 0,
         like: false,
         likeConfidence: 0,
-        lift: false,
-        press: false,
-	        open: 0,
+        open: 0,
         twoHands: false,
         twoHandDistance: 0,
-        gestureMode: 'nebula',
-        pendingMode: 'nebula',
+        gestureMode: 'gather',
+        pendingMode: 'gather',
         pendingSince: performance.now(),
         gestureLockedAt: performance.now(),
         lastGestureX: 0.5,
@@ -1664,9 +1644,7 @@
         motionY: 0,
         speed: 0,
         lastPalmAngle: 0,
-        spin: 0,
-        spinVelocity: 0,
-        sphereSpin: 0
+        spin: 0
       };
 
       const bones = [
@@ -1728,9 +1706,8 @@
       scene.add(points);
 
 	      const particles = [];
-	      let textTargets = [];
+      let textTargets = [];
       let heartTargets = [];
-      let okTargets = [];
       let likeTargets = [];
 
 	      function colorForParticle(particle, i, activeMode) {
@@ -1745,14 +1722,12 @@
           const blue = [0.08, 0.28, 0.58];
           const green = [0.02, 0.46, 0.2];
           const accent = activeMode === 'heart' ? rose
-            : activeMode === 'ok' ? blue
-              : activeMode === 'like' || activeMode === 'lift' ? green
-                : activeMode === 'press' ? steel
-                  : activeMode === 'type' || activeMode === 'nebula' ? gold
-                    : activeMode === 'vortex' ? steel
-                      : activeMode === 'gather' || activeMode === 'spin' ? [0.06, 0.5, 0.46]
-                      : teal;
-          const vividMode = activeMode === 'heart' || activeMode === 'ok' || activeMode === 'like' || activeMode === 'lift';
+            : activeMode === 'like' ? green
+              : activeMode === 'type' ? gold
+                : activeMode === 'vortex' ? steel
+                  : activeMode === 'gather' ? [0.06, 0.5, 0.46]
+                    : teal;
+          const vividMode = activeMode === 'heart' || activeMode === 'like';
           const mix = clamp(depth * 0.28 + pulse * (vividMode ? 0.46 : 0.34), 0, vividMode ? 0.84 : 0.72);
           colors[i] = lerp(ink[0], accent[0], mix);
           colors[i + 1] = lerp(ink[1], accent[1], mix);
@@ -1760,16 +1735,12 @@
           return;
         }
 
-	        if (activeMode === 'type' || activeMode === 'heart' || activeMode === 'ok' || activeMode === 'like') {
+        if (activeMode === 'type' || activeMode === 'heart' || activeMode === 'like') {
           const pulse = (Math.sin(performance.now() * 0.0032 + particle.phase) + 1) / 2;
           if (activeMode === 'heart') {
             colors[i] = lerp(0.98, 1, pulse);
             colors[i + 1] = lerp(0.18, 0.48, pulse);
             colors[i + 2] = lerp(0.36, 0.72, pulse);
-          } else if (activeMode === 'ok') {
-            colors[i] = lerp(0.28, 0.78, pulse);
-            colors[i + 1] = lerp(0.68, 0.96, pulse);
-            colors[i + 2] = 1;
           } else if (activeMode === 'like') {
             colors[i] = lerp(0.45, 0.86, pulse);
             colors[i + 1] = lerp(0.92, 1, pulse);
@@ -1784,16 +1755,13 @@
         const cyan = [0.2, 0.94, 0.82];
         const violet = [0.67, 0.53, 1.0];
         const gold = [0.96, 0.7, 0.3];
-        const coral = [1.0, 0.42, 0.36];
         const base = activeMode === 'vortex' ? violet
-          : activeMode === 'wave' || activeMode === 'press' ? coral
-            : activeMode === 'lift' ? gold
-              : activeMode === 'type' ? gold
-                : cyan;
-        const alt = activeMode === 'nebula' ? gold : activeMode === 'gather' || activeMode === 'spin' ? violet : activeMode === 'lift' ? cyan : cyan;
+          : activeMode === 'type' ? gold
+            : cyan;
+        const alt = activeMode === 'gather' ? violet : cyan;
         const pulse = (Math.sin(performance.now() * 0.004 + particle.phase) + 1) / 2;
         const depth = clamp((particle.z + 3.2) / 6.4, 0, 1);
-        const mix = clamp(depth * 0.38 + pulse * (activeMode === 'orbit' ? 0.16 : 0.38), 0, 0.92);
+        const mix = clamp(depth * 0.38 + pulse * 0.38, 0, 0.92);
         colors[i] = lerp(base[0], alt[0], mix);
         colors[i + 1] = lerp(base[1], alt[1], mix);
         colors[i + 2] = lerp(base[2], alt[2], mix);
@@ -1995,81 +1963,6 @@
         return targets;
       }
 
-      function buildLetterTargets(text, scaleRatio = 0.38) {
-        const offscreen = document.createElement('canvas');
-        const scale = 3;
-        offscreen.width = 820 * scale;
-        offscreen.height = 360 * scale;
-        const ctx = offscreen.getContext('2d');
-        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
-        ctx.fillStyle = 'rgb(0, 0, 0)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `800 ${214 * scale}px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`;
-
-        const chars = Array.from(text);
-        const gap = 18 * scale;
-        const widths = chars.map((char) => ctx.measureText(char).width);
-        const totalWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, chars.length - 1);
-        let cursor = (offscreen.width - totalWidth) / 2;
-        const baseline = offscreen.height * 0.53;
-        chars.forEach((char, index) => {
-          ctx.fillText(char, cursor + widths[index] / 2, baseline);
-          cursor += widths[index] + gap;
-        });
-
-        const data = ctx.getImageData(0, 0, offscreen.width, offscreen.height).data;
-        const raw = [];
-        let minX = offscreen.width;
-        let minY = offscreen.height;
-        let maxX = 0;
-        let maxY = 0;
-        const step = 5;
-        for (let y = 0; y < offscreen.height; y += step) {
-          for (let x = 0; x < offscreen.width; x += step) {
-            const alpha = data[(y * offscreen.width + x) * 4 + 3];
-            if (alpha > 42) {
-              const seed = Math.sin(x * 19.17 + y * 63.71) * 51437.113;
-              raw.push({ x, y, seed: seed - Math.floor(seed) });
-              minX = Math.min(minX, x);
-              minY = Math.min(minY, y);
-              maxX = Math.max(maxX, x);
-              maxY = Math.max(maxY, y);
-            }
-          }
-        }
-
-        if (!raw.length) return [];
-
-        raw.sort((a, b) => a.seed - b.seed);
-        const glyphWidth = Math.max(1, maxX - minX);
-        const glyphHeight = Math.max(1, maxY - minY);
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-        const targetWidth = Math.min(state.worldWidth * scaleRatio, state.worldHeight * scaleRatio * 1.68);
-        const targetHeight = targetWidth * (glyphHeight / glyphWidth);
-        const targets = [];
-
-        for (let i = 0; i < particleCount; i += 1) {
-          const source = raw[Math.floor((i / particleCount) * raw.length) % raw.length];
-          const seedA = Math.sin(i * 14.73) * 21931.77;
-          const seedB = Math.sin(i * 52.37) * 38713.61;
-          const jitterX = (seedA - Math.floor(seedA) - 0.5) * 0.018;
-          const jitterY = (seedB - Math.floor(seedB) - 0.5) * 0.018;
-          targets.push({
-            x: ((source.x - centerX) / glyphWidth) * targetWidth + jitterX,
-            y: ((centerY - source.y) / glyphHeight) * targetHeight + jitterY,
-            z: random(-0.055, 0.055)
-          });
-        }
-
-        return targets;
-      }
-
-      function buildOkTargets() {
-        return buildLetterTargets('OK', 0.38);
-      }
-
       function assignTargets() {
         const radius = Math.min(state.worldWidth, state.worldHeight) * 0.3;
         for (let i = 0; i < particleCount; i += 1) {
@@ -2082,26 +1975,14 @@
             vz: 0,
             phase: random(0, Math.PI * 2)
           };
-          const ringAngle = (i / particleCount) * Math.PI * 15;
-          const ringRadius = radius * (0.7 + 0.22 * Math.sin(i * 0.047));
           const vortexAngle = (i / particleCount) * Math.PI * 22;
           const vortexRadius = radius * (0.15 + 0.84 * ((i % 377) / 377));
           particle.sphere = spherePoint(i, particleCount, radius * 0.94);
-          particle.ring = {
-            x: Math.cos(ringAngle) * ringRadius,
-            y: Math.sin(ringAngle * 0.7) * radius * 0.48,
-            z: Math.sin(ringAngle) * 1.72
-          };
           particle.vortex = {
             angle: vortexAngle,
             radius: vortexRadius,
             y: ((i / particleCount) - 0.5) * state.worldHeight * 0.72,
             z: Math.sin(vortexAngle) * 1.48
-          };
-          particle.scatter = {
-            x: random(-state.worldWidth * 0.5, state.worldWidth * 0.5),
-            y: random(-state.worldHeight * 0.39, state.worldHeight * 0.39),
-            z: random(-3.2, 3.2)
           };
           particles[i] = particle;
         }
@@ -2114,13 +1995,12 @@
         renderer.setSize(state.width, state.height, false);
         camera.aspect = state.width / state.height;
         camera.updateProjectionMatrix();
-	        viewportWorld();
-	        buildTextTargets();
+        viewportWorld();
+        buildTextTargets();
         buildHeartTargets();
-        okTargets = buildOkTargets();
         likeTargets = buildSymbolTargets('👍', 0.5);
-	        assignTargets();
-	      }
+        assignTargets();
+      }
 
       function resetParticles(options = {}) {
         for (const particle of particles) {
@@ -2775,18 +2655,13 @@
         hand.heart = false;
         hand.vortex = false;
         hand.heartConfidence = 0;
-        hand.ok = false;
-        hand.okConfidence = 0;
         hand.like = false;
         hand.likeConfidence = 0;
-        hand.lift = false;
-        hand.press = false;
         hand.pinching = false;
         hand.fist = false;
-        hand.twoFinger = false;
         hand.twoHands = false;
-        hand.gestureMode = 'nebula';
-        hand.pendingMode = 'nebula';
+        hand.gestureMode = 'gather';
+        hand.pendingMode = 'gather';
         hand.pendingSince = performance.now();
         hand.gestureLockedAt = performance.now();
         hand.hasMotionSample = false;
@@ -2794,33 +2669,23 @@
         hand.motionY = 0;
         hand.speed = 0;
         hand.spin = 0;
-        hand.spinVelocity = 0;
-        hand.sphereSpin = 0;
       }
 
       function gestureDwell(mode) {
         if (mode === 'heart') return 220;
-        if (mode === 'ok') return 220;
         if (mode === 'like') return 280;
-        if (mode === 'lift' || mode === 'press') return 140;
         if (mode === 'type') return 150;
         if (mode === 'vortex') return 190;
-        if (mode === 'wave') return 150;
         if (mode === 'gather') return 110;
-        if (mode === 'spin') return 140;
         return 240;
       }
 
       function gestureHold(mode) {
         if (mode === 'heart') return 640;
-        if (mode === 'ok') return 580;
         if (mode === 'like') return 680;
-        if (mode === 'lift' || mode === 'press') return 360;
         if (mode === 'type') return 520;
         if (mode === 'vortex') return 460;
-        if (mode === 'wave') return 320;
         if (mode === 'gather') return 300;
-        if (mode === 'spin') return 360;
         return 180;
       }
 
@@ -2843,46 +2708,13 @@
 
       function resolveMode() {
         if (hand.active) {
-          return hand.gestureMode || 'nebula';
+          return hand.gestureMode || 'gather';
         }
-        if (state.pointerDown) return 'gather';
-        return state.pointerInside ? 'nebula' : 'orbit';
+        return 'gather';
       }
 
       function targetForParticle(particle, index, time, activeMode) {
-        if (activeMode === 'gather' || activeMode === 'spin') return particle.sphere;
-        if (activeMode === 'nebula') {
-          return {
-            x: particle.scatter.x * 0.64 + Math.cos(time * 0.0009 + particle.phase) * 1.18,
-            y: particle.scatter.y * 0.56 + Math.sin(time * 0.0012 + particle.phase) * 0.62,
-            z: particle.scatter.z * 0.88 + Math.cos(time * 0.0011 + particle.phase * 0.7) * 1.0
-          };
-        }
-        if (activeMode === 'wave') {
-          return {
-            x: particle.scatter.x * 0.9,
-            y: particle.scatter.y * 0.84 + Math.sin(time * 0.0022 + particle.phase) * 0.48,
-            z: particle.scatter.z * 0.94 + Math.cos(time * 0.0028 + particle.phase) * 0.82
-          };
-        }
-        if (activeMode === 'lift') {
-          const elapsed = time - state.modeChangedAt;
-          const lift = smoothstep(0, 620, elapsed);
-          return {
-            x: particle.scatter.x * (0.78 - lift * 0.12) + Math.sin(time * 0.0018 + particle.phase) * 0.12,
-            y: particle.scatter.y * 0.58 + state.worldHeight * (0.12 + lift * 0.22) + Math.sin(time * 0.002 + particle.phase) * 0.22,
-            z: particle.scatter.z * 0.82 + Math.cos(time * 0.0023 + particle.phase) * 0.48
-          };
-        }
-        if (activeMode === 'press') {
-          const elapsed = time - state.modeChangedAt;
-          const press = smoothstep(0, 620, elapsed);
-          return {
-            x: particle.scatter.x * (0.9 - press * 0.25),
-            y: particle.scatter.y * (0.32 - press * 0.08) - state.worldHeight * (0.14 + press * 0.18),
-            z: particle.scatter.z * (0.46 - press * 0.12) + Math.sin(time * 0.0025 + particle.phase) * 0.22
-          };
-        }
+        if (activeMode === 'gather') return particle.sphere;
         if (activeMode === 'vortex') {
           const input = activeInput();
           const center = hand.active ? worldFromInput(input) : { x: 0, y: 0 };
@@ -2896,21 +2728,20 @@
             z: particle.vortex.z + Math.sin(angle) * (1.26 + entry * 0.52)
           };
         }
-        if ((activeMode === 'ok' && okTargets.length) || (activeMode === 'like' && likeTargets.length)) {
-          const targets = activeMode === 'ok' ? okTargets : likeTargets;
-          const symbol = targets[index % targets.length];
+        if (activeMode === 'like' && likeTargets.length) {
+          const symbol = likeTargets[index % likeTargets.length];
           const elapsed = time - state.modeChangedAt;
           const localDelay = (particle.phase / (Math.PI * 2)) * 150;
           const t = clamp((elapsed - localDelay) / 680, 0, 1);
           const ease = 1 - Math.pow(1 - t, 3);
           const entry = 1 - ease;
-          const swirl = activeMode === 'ok' ? 0.024 : 0.16;
-          const rise = activeMode === 'like' ? 0.18 * entry : 0;
-          const entryScale = activeMode === 'ok' ? 1 + entry * 0.055 : 1 + entry * 0.32;
+          const swirl = 0.16;
+          const rise = 0.18 * entry;
+          const entryScale = 1 + entry * 0.32;
           return {
             x: symbol.x * entryScale + Math.cos(particle.phase + time * 0.0032) * swirl * entry,
             y: symbol.y * entryScale + Math.sin(particle.phase * 1.35 + time * 0.0026) * swirl * 0.68 * entry + rise,
-            z: symbol.z + Math.sin(particle.phase + time * 0.003) * (activeMode === 'ok' ? 0.08 : 0.42) * entry
+            z: symbol.z + Math.sin(particle.phase + time * 0.003) * 0.42 * entry
           };
         }
         if (activeMode === 'heart' && heartTargets.length) {
@@ -2929,7 +2760,7 @@
           };
         }
         if (activeMode === 'type' && textTargets.length) return textTargets[index % textTargets.length];
-        return particle.ring;
+        return particle.sphere;
       }
 
       function worldFromInput(input) {
@@ -2943,11 +2774,11 @@
         const input = activeInput();
         const focus = worldFromInput(input);
         const radius = 0.95 + input.strength * 2.35;
-        const isSphereMode = activeMode === 'gather' || activeMode === 'spin';
+        const isSphereMode = activeMode === 'gather';
         const magneticSign = isSphereMode ? -1 : 1;
         const isTypeMode = activeMode === 'type';
         const isHeartMode = activeMode === 'heart';
-        const isSymbolMode = activeMode === 'ok' || activeMode === 'like';
+        const isSymbolMode = activeMode === 'like';
         const isShapeMode = isTypeMode || isHeartMode || isSymbolMode || isSphereMode;
         const hasLiveInput = hand.active || state.pointerInside || state.pointerDown;
         const shapeEntrance = isShapeMode ? 1 - clamp((time - state.modeChangedAt) / 900, 0, 1) : 0;
@@ -3010,29 +2841,22 @@
         energyState.textContent = `${energy}%`;
         signalState.textContent = `${energy}%`;
         depthState.textContent = activeMode === 'type' ? '0.8'
-          : activeMode === 'heart' || activeMode === 'ok' ? '0.6'
-            : activeMode === 'like' || activeMode === 'lift' ? '2.2'
-              : activeMode === 'press' ? '1.4'
-                : activeMode === 'vortex' ? '4.1'
-                  : activeMode === 'gather' || activeMode === 'spin' ? '1.8'
-                    : '3.0';
-        modeCaption.textContent = modeCaptions[activeMode] || 'ORBIT / READY';
+          : activeMode === 'heart' ? '0.6'
+            : activeMode === 'like' ? '2.2'
+              : activeMode === 'vortex' ? '4.1'
+                : '1.8';
+        modeCaption.textContent = modeCaptions[activeMode] || 'SPHERE / LOCKED';
         modeState.textContent = modeLabels[activeMode] || '自动';
 
         let label = '待机';
         if (hand.active) {
           inputState.textContent = '手势识别';
           if (activeMode === 'heart') label = '比心爱心';
-          else if (activeMode === 'ok') label = 'OK 字母';
           else if (activeMode === 'like') label = '👍形态';
-          else if (activeMode === 'lift') label = '上推上浮';
-          else if (activeMode === 'press') label = '下压沉降';
-          else if (activeMode === 'spin') label = '双指旋球';
           else if (activeMode === 'type') label = hand.twoHands ? '双手成字' : '成字';
           else if (hand.fist) label = '握拳聚合';
           else if (hand.pinching) label = '捏合聚合';
           else if (activeMode === 'vortex') label = '旋掌漩涡';
-          else if (hand.open > 0.66) label = '张掌扩散';
           else label = '手势牵引';
         } else {
           inputState.textContent = state.cameraActive ? '等待手势' : '指针备用';
@@ -3062,51 +2886,39 @@
         const activeMode = state.activeMode;
         updateParticles(time, activeMode);
         updateLabels(activeMode);
-        const sphereLocked = activeMode === 'gather' || activeMode === 'spin';
-        const shapeLocked = activeMode === 'type' || activeMode === 'heart' || activeMode === 'ok' || activeMode === 'like' || sphereLocked;
-        if (activeMode === 'spin') {
-          hand.sphereSpin += hand.spinVelocity * delta * 0.0015;
-          hand.spinVelocity = lerp(hand.spinVelocity, 0, 0.025);
-        } else {
-          hand.spinVelocity = lerp(hand.spinVelocity, 0, 0.04);
-        }
+        const sphereLocked = activeMode === 'gather';
+        const shapeLocked = activeMode === 'type' || activeMode === 'heart' || activeMode === 'like' || sphereLocked;
         const basePointSize = isDesktopShell ? 0.044 : 0.038;
         const transitionPulse = Math.max(0, 1 - (time - state.modeChangedAt) / 720);
         const heartPulse = activeMode === 'heart' ? transitionPulse : 0;
-        const symbolPulse = activeMode === 'ok' || activeMode === 'like' ? transitionPulse : 0;
+        const symbolPulse = activeMode === 'like' ? transitionPulse : 0;
         const spherePulse = sphereLocked ? transitionPulse : 0;
         const vortexPulse = activeMode === 'vortex' ? transitionPulse : 0;
-        const confirmPulse = activeMode === 'ok' || activeMode === 'like' || activeMode === 'lift' || activeMode === 'press' ? transitionPulse : 0;
+        const confirmPulse = activeMode === 'like' ? transitionPulse : 0;
         const shapePointSize = activeMode === 'heart'
           ? (isDesktopShell ? 0.052 : 0.046) + heartPulse * 0.01
-          : activeMode === 'ok' || activeMode === 'like'
+          : activeMode === 'like'
             ? (isDesktopShell ? 0.05 : 0.044) + symbolPulse * 0.008
             : sphereLocked
               ? (isDesktopShell ? 0.047 : 0.041) + spherePulse * 0.006
               : (isDesktopShell ? 0.048 : 0.042);
         material.size = lerp(material.size, shapeLocked ? shapePointSize : basePointSize + vortexPulse * 0.008 + confirmPulse * 0.006, 0.08);
-        const targetRotationY = activeMode === 'spin'
-          ? hand.sphereSpin + Math.sin(time * 0.00018) * 0.035
-          : activeMode === 'gather'
+        const targetRotationY = activeMode === 'gather'
             ? Math.sin(time * 0.00012) * 0.045
             : shapeLocked
-              ? Math.sin(time * 0.00016) * (activeMode === 'heart' ? 0.05 + heartPulse * 0.08 : activeMode === 'ok' ? 0.006 : 0.026)
-              : Math.sin(time * 0.00018) * (activeMode === 'vortex' ? 0.16 + vortexPulse * 0.12 : activeMode === 'ok' ? 0.12 + confirmPulse * 0.08 : 0.1);
-        const targetRotationX = activeMode === 'spin'
-          ? Math.cos(time * 0.00016) * 0.052
-          : activeMode === 'gather'
+              ? Math.sin(time * 0.00016) * (activeMode === 'heart' ? 0.05 + heartPulse * 0.08 : 0.026)
+              : Math.sin(time * 0.00018) * (activeMode === 'vortex' ? 0.16 + vortexPulse * 0.12 : 0.1);
+        const targetRotationX = activeMode === 'gather'
             ? Math.cos(time * 0.0001) * 0.026
             : shapeLocked
-              ? Math.cos(time * 0.00013) * (activeMode === 'heart' ? 0.028 + heartPulse * 0.04 : activeMode === 'ok' ? 0.004 : 0.014)
-              : Math.cos(time * 0.00014) * (activeMode === 'press' ? 0.04 : activeMode === 'vortex' ? 0.1 + vortexPulse * 0.08 : 0.06);
-        const targetRotationZ = activeMode === 'spin'
-          ? Math.sin(time * 0.00013) * 0.018
-          : activeMode === 'gather'
+              ? Math.cos(time * 0.00013) * (activeMode === 'heart' ? 0.028 + heartPulse * 0.04 : 0.014)
+              : Math.cos(time * 0.00014) * (activeMode === 'vortex' ? 0.1 + vortexPulse * 0.08 : 0.06);
+        const targetRotationZ = activeMode === 'gather'
             ? Math.sin(time * 0.00011) * 0.012
             : shapeLocked
-              ? Math.sin(time * 0.00011) * (activeMode === 'heart' ? 0.035 + heartPulse * 0.08 : activeMode === 'ok' ? 0.002 : 0.008)
-              : Math.sin(time * 0.00011) * (activeMode === 'ok' ? 0.09 + confirmPulse * 0.08 : activeMode === 'vortex' ? 0.08 + vortexPulse * 0.12 : 0.025);
-        points.rotation.y = lerp(points.rotation.y, targetRotationY, activeMode === 'spin' ? 0.16 : 0.08);
+              ? Math.sin(time * 0.00011) * (activeMode === 'heart' ? 0.035 + heartPulse * 0.08 : 0.008)
+              : Math.sin(time * 0.00011) * (activeMode === 'vortex' ? 0.08 + vortexPulse * 0.12 : 0.025);
+        points.rotation.y = lerp(points.rotation.y, targetRotationY, 0.08);
         points.rotation.x = lerp(points.rotation.x, targetRotationX, 0.08);
         points.rotation.z = lerp(points.rotation.z, targetRotationZ, 0.08);
         renderer.render(scene, camera);
@@ -3228,28 +3040,7 @@
           const longEnough = distance2(tip, mcp) / palm > 0.92;
           return sum + (upward && longEnough ? 1 : 0);
         }, 0);
-        const spreadTips = (
-          distance2(middleTip, ringTip) +
-          distance2(ringTip, pinkyTip) +
-          distance2(middleTip, pinkyTip)
-        ) / palm;
-        const screenFingerExtended = (tip, pip, mcp, minLength = 0.82) => {
-          const upward = tip.y < pip.y - palm * 0.025 && tip.y < mcp.y - palm * 0.11;
-          const longEnough = distance2(tip, mcp) / palm > minLength;
-          return upward && longEnough;
-        };
-        const screenIndexExtended = screenFingerExtended(indexTip, indexPip, indexMcp, 0.82);
-        const screenMiddleExtended = screenFingerExtended(middleTip, middlePip, middleMcp2, 0.82);
-        const screenRingFolded = ringFinger.folded || ringTip.y > ringPip.y - palm * 0.015 || distance2(ringTip, ringMcp) / palm < 0.82;
-        const screenPinkyFolded = pinkyFinger.folded || pinkyTip.y > pinkyPip.y - palm * 0.015 || distance2(pinkyTip, pinkyMcp) / palm < 0.78;
         const allFoldedCount = fingerMetrics.reduce((sum, finger) => sum + (finger.folded ? 1 : 0), 0);
-        const twoFingerStructure = hands.length === 1
-          && screenIndexExtended
-          && screenMiddleExtended
-          && screenRingFolded
-          && screenPinkyFolded
-          && distance2(indexTip, middleTip) / palm > 0.18
-          && openScore > 0.34;
         const fistStructure = hands.length === 1
           && allFoldedCount >= 3
           && openScore < 0.52
@@ -3274,8 +3065,6 @@
         const indexDominance = smoothstep(-0.02, 0.26, indexReach - foldedReach);
         const closePinch = pinchRatio < 0.34;
         const heartCandidate = closePinch && foldedCount >= 2 && openScore < 0.74;
-        const okFingerSpread = screenExtendedCount >= 2 && spreadTips > 0.72;
-        const okCandidate = closePinch && okFingerSpread && openScore > 0.34;
         const heartStructure = hands.length === 1
           && heartCandidate
           && indexFinger.span > 0.34
@@ -3294,25 +3083,6 @@
           fingerHeartScore > hand.heartConfidence ? 0.32 : 0.34
         );
         const heartScore = hand.heartConfidence > (hand.gestureMode === 'heart' ? 0.44 : 0.64);
-        const okStructure = hands.length === 1
-          && okCandidate
-          && screenExtendedCount >= 2
-          && spreadTips > 0.72
-          && openScore > 0.34
-          && !heartScore;
-        const openFingerScore = Math.max(
-          smoothstep(1.45, 2.55, extendedCount),
-          smoothstep(1.45, 2.45, screenExtendedCount)
-        );
-        const okRawScore = hands.length === 1
-          ? (okStructure ? 1 : 0) * pinchClose * Math.max(openFingerScore, 0.78)
-          : 0;
-        hand.okConfidence = lerp(
-          hand.okConfidence,
-          okRawScore,
-          okRawScore > hand.okConfidence ? 0.3 : 0.32
-        );
-        const okScore = hand.okConfidence > (hand.gestureMode === 'ok' ? 0.42 : 0.62);
         const thumbUpAmount = (wrist.y - thumbTip.y) / palm;
         const thumbAboveFingers = thumbTip.y < Math.min(indexTip.y, middleTip.y, ringTip.y, pinkyTip.y) - palm * 0.08;
         const thumbLineUp = thumbTip.y < thumbIp.y && thumbIp.y < thumbMcp.y + palm * 0.1;
@@ -3327,8 +3097,7 @@
           && ringFinger.folded
           && pinkyFinger.folded
           && foldedCount >= 3
-          && !heartScore
-          && !okScore;
+          && !heartScore;
         const likeRawScore = hands.length === 1
           ? (likeStructure ? 1 : 0) * thumbUpScore * thumbExtended * compactScore
           : 0;
@@ -3367,46 +3136,23 @@
         hand.lastPalmAngle = palmAngle;
 
         const protectedShapeIntent = heartCandidate
-          || okCandidate
-          || okFingerSpread
           || hand.heartConfidence > 0.18
-          || hand.okConfidence > 0.18
           || hand.likeConfidence > 0.18;
-        const horizontalSweep = Math.abs(hand.motionX) > 0.005 && Math.abs(hand.motionX) > Math.abs(hand.motionY) * 1.2;
-        const spinDrive = twoFingerStructure && horizontalSweep
-          ? clamp(hand.motionX * 140, -4.2, 4.2)
-          : 0;
-        hand.spinVelocity = lerp(hand.spinVelocity, spinDrive, spinDrive ? 0.34 : 0.12);
-        const spinRaw = twoFingerStructure
-          && !protectedShapeIntent
-          && !heartScore
-          && !okScore
-          && !likeScore;
         const fistRaw = fistStructure
           && !protectedShapeIntent
           && !heartScore
-          && !okScore
           && !likeScore;
-        const pinchRaw = pinchRatio < 0.42 && !heartScore && !okScore && !likeScore && !heartCandidate && !okCandidate && !spinRaw;
-        const openPalmRaw = hands.length === 1 && openScore > 0.72 && foldedCount === 0 && extendedCount >= 2 && !protectedShapeIntent && !pinchRaw && !fistRaw && !spinRaw && !heartScore && !okScore && !likeScore;
-        const verticalMotion = Math.abs(hand.motionY) > 0.012 && Math.abs(hand.motionY) > Math.abs(hand.motionX) * 1.25 && hand.spin < 0.04;
-        const liftRaw = openPalmRaw && verticalMotion && hand.motionY < 0;
-        const pressRaw = openPalmRaw && verticalMotion && hand.motionY > 0;
-        const movingPalm = (Math.abs(hand.motionX) > 0.014 || hand.spin > 0.06) && !verticalMotion;
+        const pinchRaw = pinchRatio < 0.42 && !heartScore && !likeScore && !heartCandidate;
+        const openPalmRaw = hands.length === 1 && openScore > 0.72 && foldedCount === 0 && extendedCount >= 2 && !protectedShapeIntent && !pinchRaw && !fistRaw && !heartScore && !likeScore;
+        const movingPalm = Math.abs(hand.motionX) > 0.014 || hand.spin > 0.06;
         const vortexRaw = openPalmRaw && movingPalm;
-        const waveRaw = openPalmRaw && !vortexRaw && !liftRaw && !pressRaw;
 
-        let candidateMode = 'nebula';
+        let candidateMode = 'gather';
         if (twoHandRaw) candidateMode = 'type';
         else if (heartScore) candidateMode = 'heart';
-        else if (okScore) candidateMode = 'ok';
         else if (likeScore) candidateMode = 'like';
-        else if (spinRaw) candidateMode = 'spin';
         else if (fistRaw || pinchRaw) candidateMode = 'gather';
-        else if (liftRaw) candidateMode = 'lift';
-        else if (pressRaw) candidateMode = 'press';
         else if (vortexRaw) candidateMode = 'vortex';
-        else if (waveRaw) candidateMode = 'wave';
 
         const stableMode = updateHandGesture(candidateMode, now);
 
@@ -3414,21 +3160,15 @@
         hand.y = lerp(hand.y, nextY, 0.42);
         hand.open = lerp(hand.open, openScore, 0.28);
         hand.heart = stableMode === 'heart';
-        hand.ok = stableMode === 'ok';
         hand.like = stableMode === 'like';
-        hand.lift = stableMode === 'lift';
-        hand.press = stableMode === 'press';
         hand.fist = stableMode === 'gather' && fistRaw;
-        hand.twoFinger = stableMode === 'spin';
         hand.pinching = stableMode === 'gather' && (pinchRaw || fistRaw);
         hand.vortex = stableMode === 'vortex';
-        const strengthTarget = stableMode === 'heart' || stableMode === 'gather' || stableMode === 'spin' || stableMode === 'ok' || stableMode === 'like'
+        const strengthTarget = stableMode === 'heart' || stableMode === 'gather' || stableMode === 'like' || stableMode === 'type'
           ? 1
           : stableMode === 'vortex'
             ? 0.9
-            : stableMode === 'wave' || stableMode === 'lift' || stableMode === 'press'
-              ? 0.78
-              : 0.4 + openScore * 0.34;
+            : 0.4 + openScore * 0.34;
         hand.strength = lerp(hand.strength, strengthTarget, 0.3);
         hand.active = true;
         state.lastHandAt = now;
