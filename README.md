@@ -117,4 +117,10 @@ curl -X POST http://127.0.0.1:8787/agent \
 1. `DASHSCOPE_API_KEY`
 2. `ALIYUN_DASHSCOPE_API_KEY`
 
-key 不会写入前端 HTML。
+可以在项目根目录创建本地 `.env`：
+
+```bash
+DASHSCOPE_API_KEY=你的DashScopeKey
+```
+
+`.env` 已被 `.gitignore` 排除，不会提交到仓库。key 不会写入前端 HTML。

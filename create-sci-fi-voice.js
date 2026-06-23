@@ -1,7 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadLocalEnv } = require("./local-env");
 
 const rootDir = __dirname;
+loadLocalEnv(rootDir);
+
 const customizationUrl = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization";
 let ttsDesignModel = "qwen3-tts-vd-2026-01-26";
 const realtimeTargetModel = process.env.DASHSCOPE_REALTIME_MODEL || "qwen3.5-omni-plus-realtime";

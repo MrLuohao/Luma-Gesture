@@ -2,8 +2,11 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { WebSocketServer, WebSocket } = require("ws");
+const { loadLocalEnv } = require("./local-env");
 
 const rootDir = __dirname;
+loadLocalEnv(rootDir);
+
 const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || "127.0.0.1";
 const model = process.env.DASHSCOPE_REALTIME_MODEL || "qwen3.5-omni-plus-realtime";
